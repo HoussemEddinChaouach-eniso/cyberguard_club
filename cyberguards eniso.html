@@ -411,35 +411,63 @@ const flagList = [
     'Q3liM3JfR3U0cmQuRW5pc28='
 ];
 
-        // Load state from server API (global state for all users)
+        // Load state from server API with improved persistence
         async function loadState() {
             try {
-                const response = await fetch('/api/flag-state');
-                const data = await response.json();
-                currentFlagIndex = data.flagIndex;
-                attempts = data.attempts;
-                solves = data.solves;
-                updateStats();
-                // Update the page attribute with current flag
-                document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                // First, try to get state from localStorage as backup
+                const localState = {
+                    flagIndex: parseInt(localStorage.getItem('ctf_current_flag_index') || '0'),
+                    attempts: parseInt(localStorage.getItem('ctf_attempts') || '0'),
+                    solves: parseInt(localStorage.getItem('ctf_solves') || '0'),
+                    lastUpdated: parseInt(localStorage.getItem('ctf_last_updated') || '0')
+                };
+
+                // Try to sync with server
+                const response = await fetch('/api/flag-state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        action: 'sync_client_state',
+                        clientState: localState
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentFlagIndex = data.flagIndex;
+                    attempts = data.attempts;
+                    solves = data.solves;
+                    
+                    // Save to localStorage for future sync
+                    localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                    localStorage.setItem('ctf_attempts', attempts);
+                    localStorage.setItem('ctf_solves', solves);
+                    localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                } else {
+                    throw new Error('Server sync failed');
+                }
             } catch (error) {
-                console.error('Failed to load state from server:', error);
-                // Fallback to localStorage if API fails
-                const savedFlagIndex = localStorage.getItem('ctf_current_flag_index');
-                currentFlagIndex = savedFlagIndex ? parseInt(savedFlagIndex) : 0;
-                const savedAttempts = localStorage.getItem('ctf_attempts');
-                const savedSolves = localStorage.getItem('ctf_solves');
-                attempts = savedAttempts ? parseInt(savedAttempts) : 0;
-                solves = savedSolves ? parseInt(savedSolves) : 0;
-                updateStats();
-                document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                console.error('Failed to sync with server, using local state:', error);
+                // Fallback to localStorage
+                currentFlagIndex = parseInt(localStorage.getItem('ctf_current_flag_index') || '0');
+                attempts = parseInt(localStorage.getItem('ctf_attempts') || '0');
+                solves = parseInt(localStorage.getItem('ctf_solves') || '0');
             }
+            
+            updateStats();
+            // Update the page attribute with current flag
+            document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
         }
 
         function updateStats() {
             document.getElementById('attempts').textContent = attempts;
             document.getElementById('solves').textContent = solves;
-            // Note: Stats are now managed by the server API, not localStorage
+            
+            // Save stats to localStorage for persistence
+            localStorage.setItem('ctf_attempts', attempts);
+            localStorage.setItem('ctf_solves', solves);
+            localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+            localStorage.setItem('ctf_last_updated', Date.now());
         }
 
         // Decode current flag
@@ -492,14 +520,25 @@ const flagList = [
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ action: 'correct_flag' })
                     });
-                    const data = await response.json();
-                    currentFlagIndex = data.flagIndex;
-                    document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        currentFlagIndex = data.flagIndex;
+                        
+                        // Update localStorage with new state
+                        localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                        localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                        
+                        document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                    } else {
+                        throw new Error('Server update failed');
+                    }
                 } catch (error) {
-                    console.error('Failed to rotate flag on server:', error);
+                    console.error('Failed to rotate flag on server, using local rotation:', error);
                     // Fallback to local rotation
                     currentFlagIndex = (currentFlagIndex + 1) % flagList.length;
                     localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                    localStorage.setItem('ctf_last_updated', Date.now());
                     document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
                 }
 
