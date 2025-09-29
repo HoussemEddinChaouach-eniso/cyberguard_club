@@ -411,10 +411,9 @@ const flagList = [
     'Q3liM3JfR3U0cmQuRW5pc28='
 ];
 
-        // Load state from server API - server is always authoritative
+        // Load state from server API with polling for real-time updates
         async function loadState() {
             try {
-                // Always try server first - server state is authoritative
                 const response = await fetch('/api/flag-state');
                 
                 if (response.ok) {
@@ -423,18 +422,23 @@ const flagList = [
                     attempts = data.attempts;
                     solves = data.solves;
                     
-                    // Save server state to localStorage for offline fallback only
+                    // Save server state to localStorage for offline fallback
                     localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
                     localStorage.setItem('ctf_attempts', attempts);
                     localStorage.setItem('ctf_solves', solves);
                     localStorage.setItem('ctf_last_updated', data.lastUpdated);
                     
-                    console.log('Loaded state from server:', data);
+                    console.log('✅ Loaded state from server:', {
+                        flagIndex: currentFlagIndex,
+                        attempts,
+                        solves,
+                        instanceId: data.instanceId
+                    });
                 } else {
                     throw new Error('Server response not ok');
                 }
             } catch (error) {
-                console.error('Failed to load state from server, using localStorage fallback:', error);
+                console.error('❌ Failed to load state from server, using localStorage fallback:', error);
                 // Only use localStorage as fallback when server is completely unavailable
                 currentFlagIndex = parseInt(localStorage.getItem('ctf_current_flag_index') || '0');
                 attempts = parseInt(localStorage.getItem('ctf_attempts') || '0');
@@ -444,6 +448,39 @@ const flagList = [
             updateStats();
             // Update the page attribute with current flag
             document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+        }
+
+        // Poll for updates every 10 seconds to catch flag rotations from other users
+        function startPolling() {
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/api/flag-state');
+                    if (response.ok) {
+                        const data = await response.json();
+                        const newFlagIndex = data.flagIndex;
+                        
+                        // Check if flag has changed
+                        if (newFlagIndex !== currentFlagIndex) {
+                            console.log(`🔄 Flag rotated from ${currentFlagIndex} to ${newFlagIndex}`);
+                            currentFlagIndex = newFlagIndex;
+                            attempts = data.attempts;
+                            solves = data.solves;
+                            
+                            // Update UI
+                            updateStats();
+                            document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                            
+                            // Save to localStorage
+                            localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                            localStorage.setItem('ctf_attempts', attempts);
+                            localStorage.setItem('ctf_solves', solves);
+                            localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                        }
+                    }
+                } catch (error) {
+                    console.log('Polling failed:', error.message);
+                }
+            }, 10000); // Poll every 10 seconds
         }
 
         function updateStats() {
@@ -562,7 +599,10 @@ const flagList = [
         console.log('%cHint: The void holds secrets...', 'color: rgba(255,255,255,0.5); font-size: 10px;');
 
         // Initialize
-        loadState();
+        loadState().then(() => {
+            // Start polling for updates after initial load
+            startPolling();
+        });
     </script>
 </body>
 </html>
