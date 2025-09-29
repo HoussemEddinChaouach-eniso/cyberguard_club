@@ -1,5 +1,5 @@
-// Enhanced persistent storage for Vercel serverless functions
-// Uses multiple strategies to maintain state across cold starts
+// Real persistent storage using JSONBin.io (free service)
+// This ensures state persists across ALL serverless function instances
 
 const DEFAULT_STATE = {
   currentFlagIndex: 0,
@@ -8,47 +8,64 @@ const DEFAULT_STATE = {
   lastUpdated: Date.now()
 };
 
-// Global state that survives within the same function instance
-global.__ctfState = global.__ctfState || null;
-global.__ctfStateTimestamp = global.__ctfStateTimestamp || 0;
+// Using JSONBin.io as external persistent storage
+const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/6751a2b2ad19ca34f8c39a1e';
+const JSONBIN_MASTER_KEY = '$2a$10$VvS1FKjV5Z6WJzN4YP7P1OYYrE8xKzGp3M5D1Q9R6pX8VwF2L4N7C6';
 
-// State cache duration (keep state for 5 minutes in same instance)
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-// Get or initialize state with better persistence
-function getState() {
-  const now = Date.now();
-  
-  // If we have fresh cached state, use it
-  if (global.__ctfState && (now - global.__ctfStateTimestamp) < CACHE_DURATION) {
-    return global.__ctfState;
+// Read state from external storage
+async function readStateFromStorage() {
+  try {
+    console.log('📡 Reading state from external storage...');
+    const response = await fetch(`${JSONBIN_URL}/latest`, {
+      method: 'GET',
+      headers: {
+        'X-Master-Key': JSONBIN_MASTER_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Successfully read state from storage:', data.record);
+      return data.record;
+    } else {
+      console.warn('⚠️ Failed to read from storage, status:', response.status);
+    }
+  } catch (error) {
+    console.error('❌ Error reading from external storage:', error.message);
   }
   
-  // Otherwise, start with default state
-  const state = { ...DEFAULT_STATE };
-  
-  // Cache the state
-  global.__ctfState = state;
-  global.__ctfStateTimestamp = now;
-  
-  return state;
+  console.log('🔄 Using default state');
+  return DEFAULT_STATE;
 }
 
-// Update state with caching
-function updateState(newState) {
-  const state = { ...newState, lastUpdated: Date.now() };
+// Write state to external storage
+async function writeStateToStorage(state) {
+  try {
+    console.log('💾 Writing state to external storage:', state);
+    const response = await fetch(JSONBIN_URL, {
+      method: 'PUT',
+      headers: {
+        'X-Master-Key': JSONBIN_MASTER_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(state)
+    });
+    
+    if (response.ok) {
+      console.log('✅ Successfully saved state to storage');
+      return true;
+    } else {
+      console.error('❌ Failed to save state, status:', response.status);
+    }
+  } catch (error) {
+    console.error('❌ Error writing to external storage:', error.message);
+  }
   
-  // Update global cache
-  global.__ctfState = state;
-  global.__ctfStateTimestamp = Date.now();
-  
-  // Log for debugging
-  console.log(`🔄 State updated: Flag Index ${state.currentFlagIndex}, Solves: ${state.totalSolves}`);
-  
-  return state;
+  return false;
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -61,7 +78,8 @@ export default function handler(req, res) {
   }
 
   try {
-    let currentState = getState();
+    // Always read current state from external storage
+    let currentState = await readStateFromStorage();
 
     if (req.method === 'GET') {
       res.status(200).json({
@@ -69,8 +87,7 @@ export default function handler(req, res) {
         attempts: currentState.totalAttempts,
         solves: currentState.totalSolves,
         lastUpdated: currentState.lastUpdated,
-        serverTime: Date.now(),
-        instanceId: process.env.VERCEL_DEPLOYMENT_ID || 'local'
+        serverTime: Date.now()
       });
     } else if (req.method === 'POST') {
       const { action, flagIndex } = req.body;
@@ -79,22 +96,27 @@ export default function handler(req, res) {
       switch (action) {
         case 'increment_attempts':
           newState.totalAttempts++;
+          newState.lastUpdated = Date.now();
           break;
           
         case 'correct_flag':
           newState.totalSolves++;
+          const oldIndex = newState.currentFlagIndex;
           newState.currentFlagIndex = (newState.currentFlagIndex + 1) % 72;
-          console.log(`🎯 FLAG SOLVED! Rotating to index ${newState.currentFlagIndex}`);
+          newState.lastUpdated = Date.now();
+          console.log(`🎯 FLAG SOLVED! Rotating from ${oldIndex} to ${newState.currentFlagIndex}`);
           break;
           
         case 'set_flag_index':
           if (typeof flagIndex === 'number') {
             newState.currentFlagIndex = flagIndex % 72;
+            newState.lastUpdated = Date.now();
           }
           break;
           
         case 'reset':
           Object.assign(newState, DEFAULT_STATE);
+          newState.lastUpdated = Date.now();
           console.log('🔄 State reset to defaults');
           break;
           
@@ -102,15 +124,21 @@ export default function handler(req, res) {
           return res.status(400).json({ error: 'Invalid action' });
       }
 
-      currentState = updateState(newState);
+      // Save the updated state to external storage
+      const saved = await writeStateToStorage(newState);
+      
+      if (!saved) {
+        console.error('⚠️ Failed to save to external storage, returning old state');
+        newState = currentState; // Revert if save failed
+      }
 
       res.status(200).json({
-        flagIndex: currentState.currentFlagIndex,
-        attempts: currentState.totalAttempts,
-        solves: currentState.totalSolves,
-        lastUpdated: currentState.lastUpdated,
+        flagIndex: newState.currentFlagIndex,
+        attempts: newState.totalAttempts,
+        solves: newState.totalSolves,
+        lastUpdated: newState.lastUpdated,
         serverTime: Date.now(),
-        instanceId: process.env.VERCEL_DEPLOYMENT_ID || 'local'
+        saved: saved
       });
     } else {
       res.status(405).json({ error: 'Method not allowed' });
