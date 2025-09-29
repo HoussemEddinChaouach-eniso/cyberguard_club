@@ -300,28 +300,35 @@ const flagList = [
     'Q3liM3JfR3U0cmQuRW5pc28='
 ];
 
-        // Load state from localStorage (persisting across page reloads)
-        function loadState() {
-            // Load the current flag index from localStorage to persist across reloads
-            const savedFlagIndex = localStorage.getItem('ctf_current_flag_index');
-            currentFlagIndex = savedFlagIndex ? parseInt(savedFlagIndex) : 0;
-            
-            // Load stats from localStorage too
-            const savedAttempts = localStorage.getItem('ctf_attempts');
-            const savedSolves = localStorage.getItem('ctf_solves');
-            attempts = savedAttempts ? parseInt(savedAttempts) : 0;
-            solves = savedSolves ? parseInt(savedSolves) : 0;
-            
-            updateStats();
+        // Load state from server API (global state for all users)
+        async function loadState() {
+            try {
+                const response = await fetch('/api/flag-state');
+                const data = await response.json();
+                currentFlagIndex = data.flagIndex;
+                attempts = data.attempts;
+                solves = data.solves;
+                updateStats();
+                // Update the page attribute with current flag
+                document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+            } catch (error) {
+                console.error('Failed to load state from server:', error);
+                // Fallback to localStorage if API fails
+                const savedFlagIndex = localStorage.getItem('ctf_current_flag_index');
+                currentFlagIndex = savedFlagIndex ? parseInt(savedFlagIndex) : 0;
+                const savedAttempts = localStorage.getItem('ctf_attempts');
+                const savedSolves = localStorage.getItem('ctf_solves');
+                attempts = savedAttempts ? parseInt(savedAttempts) : 0;
+                solves = savedSolves ? parseInt(savedSolves) : 0;
+                updateStats();
+                document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+            }
         }
 
         function updateStats() {
             document.getElementById('attempts').textContent = attempts;
             document.getElementById('solves').textContent = solves;
-            
-            // Save stats to localStorage
-            localStorage.setItem('ctf_attempts', attempts);
-            localStorage.setItem('ctf_solves', solves);
+            // Note: Stats are now managed by the server API, not localStorage
         }
 
         // Decode current flag
@@ -332,7 +339,18 @@ const flagList = [
         // Hidden flag in page (inspectable)
         document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
 
-        function checkFlag() {
+        async function checkFlag() {
+            // Increment attempts on server
+            try {
+                await fetch('/api/flag-state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'increment_attempts' })
+                });
+            } catch (error) {
+                console.error('Failed to update attempts on server:', error);
+            }
+            
             attempts++;
             updateStats();
             
@@ -356,10 +374,23 @@ const flagList = [
                     </span>
                 `;
 
-                // Rotate to next flag immediately for next participant
-                currentFlagIndex = (currentFlagIndex + 1) % flagList.length;
-                localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
-                document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                // Rotate to next flag on server (global for all users)
+                try {
+                    const response = await fetch('/api/flag-state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'correct_flag' })
+                    });
+                    const data = await response.json();
+                    currentFlagIndex = data.flagIndex;
+                    document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                } catch (error) {
+                    console.error('Failed to rotate flag on server:', error);
+                    // Fallback to local rotation
+                    currentFlagIndex = (currentFlagIndex + 1) % flagList.length;
+                    localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                    document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                }
 
                 // Redirect to the Google Form after a short delay
                 setTimeout(() => {
