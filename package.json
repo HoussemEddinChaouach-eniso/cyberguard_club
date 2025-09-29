@@ -1,0 +1,11 @@
+{
+  "name": "cyberguards-ctf",
+  "version": "1.0.0",
+  "description": "ENISO CyberGuards CTF Challenge",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'Static site - no build required' && exit 0"
+  },
+  "author": "ENISO CyberGuards",
+  "license": "MIT"
+}

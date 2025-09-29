@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ENISO CyberGuards - CTF Challenge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a1f3a 0%, #0f1420 100%);
+            color: #00ff88;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .glitch-container {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            max-width: 400px;
+            width: 90%;
+            filter: drop-shadow(0 0 20px rgba(0, 255, 136, 0.3));
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { filter: drop-shadow(0 0 20px rgba(0, 255, 136, 0.3)); }
+            50% { filter: drop-shadow(0 0 40px rgba(0, 255, 136, 0.6)); }
+        }
+
+        .container {
+            background: rgba(15, 20, 32, 0.8);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #00ccff;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .challenge-text {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-left: 4px solid #00ff88;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff88;
+            border-radius: 5px;
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+            border-color: #00ccff;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #00ff88 0%, #00ccff 100%);
+            border: none;
+            border-radius: 5px;
+            color: #0f1420;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Courier New', monospace;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        .success {
+            background: rgba(0, 255, 136, 0.2);
+            border: 2px solid #00ff88;
+            display: block;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .error {
+            background: rgba(255, 0, 100, 0.2);
+            border: 2px solid #ff0064;
+            color: #ff0064;
+            display: block;
+            animation: shake 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .hint {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 204, 255, 0.1);
+            border-left: 4px solid #00ccff;
+            font-size: 0.9em;
+            color: #00ccff;
+        }
+
+        .stats {
+            margin-top: 20px;
+            text-align: center;
+            color: #888;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <div class="glitch-container">
+        <img src="555583855_24639221942363942_7575546805787447300_n.jpg" alt="ENISO CyberGuards" class="logo">
+    </div>
+
+    <div class="container">
+        <h1>🛡️ CTF CHALLENGE 🛡️</h1>
+        <p class="subtitle">ENISO CyberGuards - Level 1</p>
+        
+        <div class="challenge-text">
+            <p><strong>Mission:</strong> Find the hidden flag!</p>
+            <p style="margin-top: 10px;">The flag is somewhere in this page... Can you find it?</p>
+            <p style="margin-top: 10px;">Format: <code>flag{...}</code></p>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="flagInput" placeholder="Enter the flag here..." autocomplete="off">
+        </div>
+
+        <button onclick="checkFlag()">SUBMIT FLAG</button>
+
+        <div id="message" class="message"></div>
+
+        <div class="hint">
+            <strong>💡 Hint:</strong> Sometimes the most valuable secrets are hidden in plain sight... but not visible to the naked eye. Try inspecting deeper.
+        </div>
+
+        <div class="stats" id="stats">
+            Attempts: <span id="attempts">0</span> | Solves: <span id="solves">0</span>
+        </div>
+    </div>
+
+    <!-- The flag is hidden here in the HTML comments and obfuscated in JavaScript -->
+    <!-- But which one is the real flag? -->
+    <!-- flag{fake_flag_try_harder} -->
+    <!-- flag{n0t_th1s_0ne_either} -->
+    
+    <script>
+        // Current flag index stored in memory
+        let currentFlagIndex = 0;
+        let attempts = 0;
+        let solves = 0;
+
+        // Flag rotation list - obfuscated
+const flagList = [
+    'QzdCM1JfR1U0UkRfRW4xNTA=',
+    'Q3liM3JHdTRyZEVuMTVv',
+    'Y3liM3JfZ3U0cmRfZW4xNW8=',
+    'Y3liZXJfZ3U0cmRfZW5pNW8=',
+    'Y3liM3JfZ3U0cmRfM24xc28=',
+    'Q3liM3JHdWFyZEVuMTVv',
+    'Y3liZXJfZ3U0cmRfM24xc28=',
+    'Q3liM3JfZ3VhcmRfZW5pNW8=',
+    'VV9EMWRFMVQ=',
+    'QzBuZ3I0dDVfdV9kMWRfMXQ=',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q1lCM1ItZ3U0cmQuRU5JU08=',
+    'Q3liZXItR1U0UkRfRU4xU08=',
+    'Q3liZXIuR1U0UkQuRW4xNTA=',
+    'Y3liM3JfR1VBUkQtRU4xNU8=',
+    'Q1lCM1JfR1VBUkQuRW5pc28=',
+    'Q1lCM1IuR3U0cmRlbmk1bw==',
+    'Q3liZXJHdTRyZC1FTjFTTw==',
+    'Q1lCM1JHdTRyZF9lbmk1bw==',
+    'Y1liM3IuZ3U0cmRfRW4xc28=',
+    'Q1lCM1ItR1VBUkQuRW4xc28=',
+    'Q3liZXJfR3U0cmRFTklTTw==',
+    'Y3liM3ItR3U0cmQuZW4xNTA=',
+    'Q3liM3IuR3U0cmRfM24xc28=',
+    'Q1lCRVJHdTRyZC1Fbmlzbw==',
+    'Y3liM3JfR3U0cmQuZW4xc28=',
+    'Y3liZXItR1VBUkQuRW4xNTA=',
+    'Q3liM3IuR3U0cmQuZW4xNTA=',
+    'Q1lCM1JfR1VBUkQuRW5pc28=',
+    'Q1lCM1IuR3U0cmRlbmk1bw==',
+    'Q3liZXJHdTRyZC1FTjFTTw==',
+    'Y3liM3JfR3U0cmQuZW4xc28=',
+    'Y3liM3JfR3U0cmQuZW4xc28=',
+    'Q3liM3JfZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28='
+];
+
+        // Load state from localStorage (persisting across page reloads)
+        function loadState() {
+            // Load the current flag index from localStorage to persist across reloads
+            const savedFlagIndex = localStorage.getItem('ctf_current_flag_index');
+            currentFlagIndex = savedFlagIndex ? parseInt(savedFlagIndex) : 0;
+            
+            // Load stats from localStorage too
+            const savedAttempts = localStorage.getItem('ctf_attempts');
+            const savedSolves = localStorage.getItem('ctf_solves');
+            attempts = savedAttempts ? parseInt(savedAttempts) : 0;
+            solves = savedSolves ? parseInt(savedSolves) : 0;
+            
+            updateStats();
+        }
+
+        function updateStats() {
+            document.getElementById('attempts').textContent = attempts;
+            document.getElementById('solves').textContent = solves;
+            
+            // Save stats to localStorage
+            localStorage.setItem('ctf_attempts', attempts);
+            localStorage.setItem('ctf_solves', solves);
+        }
+
+        // Decode current flag
+        function getCurrentFlag() {
+            return atob(flagList[currentFlagIndex]);
+        }
+
+        // Hidden flag in page (inspectable)
+        document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+
+        function checkFlag() {
+            attempts++;
+            updateStats();
+            
+            const input = document.getElementById('flagInput').value.trim();
+            const currentFlag = getCurrentFlag();
+            const messageEl = document.getElementById('message');
+
+            // Check if flag matches (with or without flag{} wrapper)
+            const normalizedInput = input.replace(/^flag\{|\}$/g, '');
+            
+            if (normalizedInput === currentFlag || input === `flag{${currentFlag}}`) {
+                solves++;
+                updateStats();
+                
+                messageEl.className = 'message success';
+                messageEl.innerHTML = `
+                    ✅ CORRECT FLAG!<br>
+                    <strong>flag{${currentFlag}}</strong><br>
+                    <span style="font-size: 0.9em; margin-top: 10px; display: block;">
+                    Redirecting to the form...
+                    </span>
+                `;
+
+                // Rotate to next flag immediately for next participant
+                currentFlagIndex = (currentFlagIndex + 1) % flagList.length;
+                localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+
+                // Redirect to the Google Form after a short delay
+                setTimeout(() => {
+                    window.location.href = 'https://docs.google.com/forms/d/e/1FAIpQLScxw6hkaqiW9lUfGmLPlJMX4cpkh7_q5K8pfLqFldWN3THkOg/viewform?usp=send_form';
+                }, 2000);
+
+            } else {
+                messageEl.className = 'message error';
+                messageEl.textContent = '❌ INCORRECT FLAG! Try again...';
+                
+                // Clear error message after 3 seconds
+                setTimeout(() => {
+                    messageEl.style.display = 'none';
+                }, 3000);
+            }
+
+            document.getElementById('flagInput').value = '';
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('flagInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                checkFlag();
+            }
+        });
+
+        // Easter egg in console
+        console.log('%c🛡️ ENISO CyberGuards CTF', 'color: #00ff88; font-size: 20px; font-weight: bold;');
+        console.log('%cLooking in the console? Smart move!', 'color: #00ccff; font-size: 14px;');
+        console.log('%cBut the flag is hidden elsewhere... 🤔', 'color: #00ccff; font-size: 14px;');
+        console.log('%cHint: Check the page attributes...', 'color: #888; font-size: 12px;');
+
+        // Initialize
+        loadState();
+    </script>
+</body>
+</html>
