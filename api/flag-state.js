@@ -1,13 +1,10 @@
-// Simple persistent state using a global variable that persists during function lifetime
-// For true persistence across cold starts, you'd need a database like Vercel KV
-
-// Global state that persists during the function's lifetime
+// Persistent state using global variable with better initialization
 global.flagState = global.flagState || {
   currentFlagIndex: 0,
   totalAttempts: 0,
   totalSolves: 0,
   lastUpdated: Date.now(),
-  initialized: false
+  initialized: true // Always consider server initialized
 };
 
 export default function handler(req, res) {
@@ -21,11 +18,11 @@ export default function handler(req, res) {
     return;
   }
 
-  // Use global state
+  // Use global state - server is always authoritative
   let currentState = global.flagState;
 
   if (req.method === 'GET') {
-    // Return current flag state
+    // Return current flag state (server is authoritative)
     res.status(200).json({
       flagIndex: currentState.currentFlagIndex,
       attempts: currentState.totalAttempts,
@@ -34,45 +31,20 @@ export default function handler(req, res) {
       serverTime: Date.now()
     });
   } else if (req.method === 'POST') {
-    const { action, flagIndex, clientState } = req.body;
+    const { action, flagIndex } = req.body;
 
-    // If client sends their state and server state seems behind, use client state
-    if (clientState && !currentState.initialized && clientState.lastUpdated) {
-      currentState = {
-        currentFlagIndex: clientState.flagIndex || 0,
-        totalAttempts: clientState.attempts || 0,
-        totalSolves: clientState.solves || 0,
-        lastUpdated: clientState.lastUpdated,
-        initialized: true
-      };
-      global.flagState = currentState;
-    }
-
-    if (action === 'sync_client_state' && clientState) {
-      // Sync client state to server if server is behind
-      if (clientState.lastUpdated > currentState.lastUpdated) {
-        currentState = {
-          currentFlagIndex: clientState.flagIndex || 0,
-          totalAttempts: clientState.attempts || 0,
-          totalSolves: clientState.solves || 0,
-          lastUpdated: clientState.lastUpdated,
-          initialized: true
-        };
-        global.flagState = currentState;
-      }
-    } else if (action === 'increment_attempts') {
+    // Server state is always authoritative - don't sync from client
+    if (action === 'increment_attempts') {
       currentState.totalAttempts++;
       currentState.lastUpdated = Date.now();
-      currentState.initialized = true;
     } else if (action === 'correct_flag') {
       currentState.totalSolves++;
       currentState.currentFlagIndex = (currentState.currentFlagIndex + 1) % 72;
       currentState.lastUpdated = Date.now();
-      currentState.initialized = true;
+      console.log(`Flag rotated to index: ${currentState.currentFlagIndex}`);
     } else if (action === 'set_flag_index' && typeof flagIndex === 'number') {
       currentState.currentFlagIndex = flagIndex % 72;
       currentState.lastUpdated = Date.now();
-      currentState.initialized = true;
     } else if (action === 'reset') {
       currentState = {
         currentFlagIndex: 0,
