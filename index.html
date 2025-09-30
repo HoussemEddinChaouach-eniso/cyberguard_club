@@ -414,7 +414,13 @@ const flagList = [
         // Load state from server API with polling for real-time updates
         async function loadState() {
             try {
-                const response = await fetch('/api/flag-state');
+                console.log('📡 Fetching current state from server...');
+                const response = await fetch('/api/flag-state', {
+                    method: 'GET',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate'
+                    }
+                });
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -422,26 +428,47 @@ const flagList = [
                     currentFlagIndex = Q; // Current flag is at index Q
                     attempts = data.attempts || 0;
                     
-                    // Save server state to localStorage for offline fallback
+                    console.log(`✅ Loaded state from server: Q=${Q}, currentFlagIndex=${currentFlagIndex}, attempts=${attempts}`);
+                    
+                    // Save server state to localStorage for offline fallback only
                     localStorage.setItem('ctf_Q', Q);
                     localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
                     localStorage.setItem('ctf_attempts', attempts);
                     localStorage.setItem('ctf_last_updated', data.lastUpdated);
-                    
-                    console.log('✅ Loaded state from server:', {
-                        Q: Q,
-                        currentFlagIndex: currentFlagIndex,
-                        attempts: attempts
-                    });
                 } else {
-                    throw new Error('Server response not ok');
+                    console.error('❌ Server response not ok:', response.status);
+                    throw new Error(`Server response ${response.status}`);
                 }
             } catch (error) {
-                console.error('❌ Failed to load state from server, using localStorage fallback:', error);
-                // Only use localStorage as fallback when server is completely unavailable
-                Q = parseInt(localStorage.getItem('ctf_Q') || '0');
-                currentFlagIndex = Q;
-                attempts = parseInt(localStorage.getItem('ctf_attempts') || '0');
+                console.error('❌ Failed to load state from server:', error);
+                
+                // Try again after a short delay before falling back to localStorage
+                console.log('🔄 Retrying server connection in 2 seconds...');
+                setTimeout(async () => {
+                    try {
+                        const retryResponse = await fetch('/api/flag-state');
+                        if (retryResponse.ok) {
+                            const data = await retryResponse.json();
+                            Q = data.Q || 0;
+                            currentFlagIndex = Q;
+                            attempts = data.attempts || 0;
+                            updateStats();
+                            document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                            console.log('✅ Successfully loaded state on retry:', { Q, currentFlagIndex, attempts });
+                            return;
+                        }
+                    } catch (retryError) {
+                        console.error('❌ Retry also failed:', retryError);
+                    }
+                    
+                    // Only use localStorage as last resort
+                    console.warn('⚠️ Using localStorage fallback - may be outdated');
+                    Q = parseInt(localStorage.getItem('ctf_Q') || '0');
+                    currentFlagIndex = Q;
+                    attempts = parseInt(localStorage.getItem('ctf_attempts') || '0');
+                    updateStats();
+                    document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                }, 2000);
             }
             
             updateStats();
@@ -449,52 +476,57 @@ const flagList = [
             document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
         }
 
-        // Poll for updates every 5 seconds to catch flag rotations from other users
+        // Poll for updates every 3 seconds to catch flag rotations from other users
         function startPolling() {
             setInterval(async () => {
                 try {
-                    const response = await fetch('/api/flag-state');
+                    const response = await fetch('/api/flag-state', {
+                        headers: { 'Cache-Control': 'no-cache' }
+                    });
                     if (response.ok) {
                         const data = await response.json();
-                        const newFlagIndex = data.flagIndex;
+                        const serverQ = data.Q || 0;
+                        const serverFlagIndex = serverQ; // Current flag is always at index Q
                         
-                        // Check if flag has changed
-                        if (newFlagIndex !== currentFlagIndex) {
-                            console.log(`🔄 Flag rotated from ${currentFlagIndex} to ${newFlagIndex} (from another user)`);
-                            const oldFlagIndex = currentFlagIndex;
-                            currentFlagIndex = newFlagIndex;
-                            attempts = data.attempts;
-                            solves = data.solves;
+                        // Check if Q has changed (someone solved a flag)
+                        if (serverQ !== Q || serverFlagIndex !== currentFlagIndex) {
+                            console.log(`🔄 State updated from server: Q changed from ${Q} to ${serverQ}`);
+                            const oldQ = Q;
+                            Q = serverQ;
+                            currentFlagIndex = serverFlagIndex;
+                            attempts = data.attempts || 0;
                             
                             // Update UI
                             updateStats();
                             document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
                             
                             // Save to localStorage
+                            localStorage.setItem('ctf_Q', Q);
                             localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
                             localStorage.setItem('ctf_attempts', attempts);
-                            localStorage.setItem('ctf_solves', solves);
                             localStorage.setItem('ctf_last_updated', data.lastUpdated);
                             
                             // Show a notification that the flag changed
-                            const messageEl = document.getElementById('message');
-                            messageEl.className = 'message success';
-                            messageEl.innerHTML = `
-                                ⚡ TOKEN ROTATED ⚡<br>
-                                Previous token is now INVALID<br>
-                                <span style="font-size: 0.8em; margin-top: 5px; display: block;">
-                                Someone solved the challenge. New token is active.
-                                </span>
-                            `;
-                            setTimeout(() => {
-                                messageEl.style.display = 'none';
-                            }, 4000);
+                            if (oldQ !== Q) {
+                                const messageEl = document.getElementById('message');
+                                messageEl.className = 'message success';
+                                messageEl.innerHTML = `
+                                    ⚡ TOKEN ROTATED ⚡<br>
+                                    Previous token is now INVALID<br>
+                                    <span style="font-size: 0.8em; margin-top: 5px; display: block;">
+                                    Someone solved the challenge. Q is now ${Q}.
+                                    </span>
+                                `;
+                                setTimeout(() => {
+                                    messageEl.style.display = 'none';
+                                }, 4000);
+                            }
                         }
                     }
                 } catch (error) {
                     console.log('Polling failed:', error.message);
                 }
-            }, 5000); // Poll every 5 seconds for faster updates
+            }, 3000); // Poll every 3 seconds for faster synchronization
         }
 
         function updateStats() {
@@ -647,10 +679,24 @@ const flagList = [
         console.log('%cSearching for vulnerabilities? 🔍', 'color: #FFFFFF; font-size: 12px;');
         console.log('%cHint: The void holds secrets...', 'color: rgba(255,255,255,0.5); font-size: 10px;');
 
-        // Initialize
+        // Initialize - Force fresh load from server every time
+        console.log('🚀 Initializing CTF Challenge - Loading fresh state from server...');
+        
+        // Clear any stale localStorage data to force server sync
+        localStorage.removeItem('ctf_Q');
+        localStorage.removeItem('ctf_current_flag_index');
+        
         loadState().then(() => {
+            console.log(`✅ Initialization complete: Q=${Q}, currentFlagIndex=${currentFlagIndex}`);
             // Start polling for updates after initial load
             startPolling();
+        }).catch((error) => {
+            console.error('❌ Failed to initialize:', error);
+            // Force retry initialization
+            setTimeout(() => {
+                console.log('🔄 Retrying initialization...');
+                loadState().then(() => startPolling());
+            }, 3000);
         });
     </script>
 </body>
