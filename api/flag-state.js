@@ -2,7 +2,7 @@
 // This ensures state persists across ALL serverless function instances
 
 const DEFAULT_STATE = {
-  Q: Math.floor(Math.random() * 72), // Start with random flag index
+  Q: 0, // Start with flag index 0 and only increment when flags are solved
   totalAttempts: 0,
   lastUpdated: Date.now(),
   lastRotation: Date.now(), // Track when flag was last rotated
