@@ -462,6 +462,7 @@ const flagList = [
                         // Check if flag has changed
                         if (newFlagIndex !== currentFlagIndex) {
                             console.log(`🔄 Flag rotated from ${currentFlagIndex} to ${newFlagIndex} (from another user)`);
+                            const oldFlagIndex = currentFlagIndex;
                             currentFlagIndex = newFlagIndex;
                             attempts = data.attempts;
                             solves = data.solves;
@@ -479,10 +480,16 @@ const flagList = [
                             // Show a notification that the flag changed
                             const messageEl = document.getElementById('message');
                             messageEl.className = 'message success';
-                            messageEl.innerHTML = '🔄 Flag rotated! Someone solved the previous flag.';
+                            messageEl.innerHTML = `
+                                ⚡ TOKEN ROTATED ⚡<br>
+                                Previous token is now INVALID<br>
+                                <span style="font-size: 0.8em; margin-top: 5px; display: block;">
+                                Someone solved the challenge. New token is active.
+                                </span>
+                            `;
                             setTimeout(() => {
                                 messageEl.style.display = 'none';
-                            }, 3000);
+                            }, 4000);
                         }
                     }
                 } catch (error) {
@@ -511,83 +518,133 @@ const flagList = [
         document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
 
         async function checkFlag() {
-            // Increment attempts on server
-            try {
-                await fetch('/api/flag-state', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'increment_attempts' })
-                });
-            } catch (error) {
-                console.error('Failed to update attempts on server:', error);
-            }
-            
-            attempts++;
-            updateStats();
-            
             const input = document.getElementById('flagInput').value.trim();
-            const currentFlag = getCurrentFlag();
             const messageEl = document.getElementById('message');
 
-            // Check if flag matches (with or without flag{} wrapper)
-            const normalizedInput = input.replace(/^flag\{|\}$/g, '');
-            
-            if (normalizedInput === currentFlag || input === `flag{${currentFlag}}`) {
-                solves++;
-                updateStats();
-                
-                messageEl.className = 'message success';
-                messageEl.innerHTML = `
-                    ◦ ACCESS GRANTED ◦<br>
-                    <strong>TOKEN: flag{${currentFlag}}</strong><br>
-                    <span style="font-size: 0.9em; margin-top: 10px; display: block;">
-                    Redirecting to secure channel...
-                    </span>
-                `;
-
-                // Rotate to next flag on server (global for all users)
-                try {
-                    const response = await fetch('/api/flag-state', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'correct_flag' })
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        currentFlagIndex = data.flagIndex;
-                        
-                        // Update localStorage with new server state
-                        localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
-                        localStorage.setItem('ctf_last_updated', data.lastUpdated);
-                        
-                        document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
-                        console.log(`Flag rotated to index: ${currentFlagIndex}`);
-                    } else {
-                        throw new Error('Server update failed');
-                    }
-                } catch (error) {
-                    console.error('Failed to rotate flag on server, using local rotation:', error);
-                    // Fallback to local rotation only if server is completely unavailable
-                    currentFlagIndex = (currentFlagIndex + 1) % flagList.length;
-                    localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
-                    localStorage.setItem('ctf_last_updated', Date.now());
-                    document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
-                }
-
-                // Redirect to the Google Form after a short delay
-                setTimeout(() => {
-                    window.location.href = 'https://docs.google.com/forms/d/e/1FAIpQLScxw6hkaqiW9lUfGmLPlJMX4cpkh7_q5K8pfLqFldWN3THkOg/viewform?usp=send_form';
-                }, 2000);
-
-            } else {
+            if (!input) {
                 messageEl.className = 'message error';
-                messageEl.textContent = '◦ ACCESS DENIED ◦ Invalid authentication token.';
-                
-                // Clear error message after 3 seconds
+                messageEl.textContent = '◦ ACCESS DENIED ◦ Please enter an authentication token.';
                 setTimeout(() => {
                     messageEl.style.display = 'none';
                 }, 3000);
+                return;
+            }
+
+            // Submit flag to server for validation and immediate rotation
+            try {
+                const response = await fetch('/api/flag-state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        action: 'validate_and_submit_flag',
+                        submittedFlag: input
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Flag was correct - server has already rotated
+                        solves++;
+                        currentFlagIndex = data.flagIndex;
+                        attempts = data.attempts;
+                        
+                        updateStats();
+                        document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                        
+                        // Update localStorage
+                        localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                        localStorage.setItem('ctf_attempts', attempts);
+                        localStorage.setItem('ctf_solves', solves);
+                        localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                        
+                        messageEl.className = 'message success';
+                        messageEl.innerHTML = `
+                            ◦ ACCESS GRANTED ◦<br>
+                            <strong>TOKEN ACCEPTED</strong><br>
+                            <span style="font-size: 0.9em; margin-top: 10px; display: block;">
+                            Token is now invalid for everyone. Redirecting to secure channel...
+                            </span>
+                        `;
+
+                        // Redirect to the Google Form after a short delay
+                        setTimeout(() => {
+                            window.location.href = 'https://docs.google.com/forms/d/e/1FAIpQLScxw6hkaqiW9lUfGmLPlJMX4cpkh7_q5K8pfLqFldWN3THkOg/viewform?usp=send_form';
+                        }, 2000);
+                    } else {
+                        // Flag was incorrect
+                        attempts = data.attempts;
+                        updateStats();
+                        
+                        messageEl.className = 'message error';
+                        messageEl.textContent = '◦ ACCESS DENIED ◦ Invalid authentication token.';
+                        
+                        // Clear error message after 3 seconds
+                        setTimeout(() => {
+                            messageEl.style.display = 'none';
+                        }, 3000);
+                    }
+                } else {
+                    throw new Error('Server validation failed');
+                }
+            } catch (error) {
+                console.error('Failed to validate flag on server:', error);
+                
+                // Fallback to local validation (legacy behavior)
+                attempts++;
+                updateStats();
+                
+                const currentFlag = getCurrentFlag();
+                const normalizedInput = input.replace(/^flag\{|\}$/g, '');
+                
+                if (normalizedInput === currentFlag || input === `flag{${currentFlag}}`) {
+                    // Try to rotate on server as fallback
+                    try {
+                        const response = await fetch('/api/flag-state', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'correct_flag' })
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            currentFlagIndex = data.flagIndex;
+                            localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                            localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                            document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                        }
+                    } catch (rotateError) {
+                        console.error('Failed to rotate flag on server:', rotateError);
+                        // Local fallback rotation
+                        currentFlagIndex = (currentFlagIndex + 1) % flagList.length;
+                        localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                        document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                    }
+                    
+                    solves++;
+                    updateStats();
+                    
+                    messageEl.className = 'message success';
+                    messageEl.innerHTML = `
+                        ◦ ACCESS GRANTED ◦<br>
+                        <strong>TOKEN ACCEPTED</strong><br>
+                        <span style="font-size: 0.9em; margin-top: 10px; display: block;">
+                        Redirecting to secure channel...
+                        </span>
+                    `;
+
+                    setTimeout(() => {
+                        window.location.href = 'https://docs.google.com/forms/d/e/1FAIpQLScxw6hkaqiW9lUfGmLPlJMX4cpkh7_q5K8pfLqFldWN3THkOg/viewform?usp=send_form';
+                    }, 2000);
+                } else {
+                    messageEl.className = 'message error';
+                    messageEl.textContent = '◦ ACCESS DENIED ◦ Invalid authentication token.';
+                    
+                    setTimeout(() => {
+                        messageEl.style.display = 'none';
+                    }, 3000);
+                }
             }
 
             document.getElementById('flagInput').value = '';

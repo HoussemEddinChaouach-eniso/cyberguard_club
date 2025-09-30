@@ -5,7 +5,85 @@ const DEFAULT_STATE = {
   currentFlagIndex: 0,
   totalAttempts: 0,
   totalSolves: 0,
-  lastUpdated: Date.now()
+  lastUpdated: Date.now(),
+  flagList: [
+    'QzdCM1JfR1U0UkRfRW4xNTA=',
+    'Q3liM3JHdTRyZEVuMTVv',
+    'Y3liM3JfZ3U0cmRfZW4xNW8=',
+    'Y3liZXJfZ3U0cmRfZW5pNW8=',
+    'Y3liM3JfZ3U0cmRfM24xc28=',
+    'Q3liM3JHdWFyZEVuMTVv',
+    'Y3liZXJfZ3U0cmRfM24xc28=',
+    'Q3liM3JfZ3VhcmRfZW5pNW8=',
+    'VV9EMWRFMVQ=',
+    'QzBuZ3I0dDVfdV9kMWRfMXQ=',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q1lCM1ItZ3U0cmQuRU5JU08=',
+    'Q3liZXItR1U0UkRfRU4xU08=',
+    'Q3liZXIuR1U0UkQuRW4xNTA=',
+    'Y3liM3JfR1VBUkQtRU4xNU8=',
+    'Q1lCM1JfR1VBUkQuRW5pc28=',
+    'Q1lCM1IuR3U0cmRlbmk1bw==',
+    'Q3liZXJHdTRyZC1FTjFTTw==',
+    'Q1lCM1JHdTRyZF9lbmk1bw==',
+    'Y1liM3IuZ3U0cmRfRW4xc28=',
+    'Q1lCM1ItR1VBUkQuRW4xc28=',
+    'Q3liZXJfR3U0cmRFTklTTw==',
+    'Y3liM3ItR3U0cmQuZW4xNTA=',
+    'Q3liM3IuR3U0cmRfM24xc28=',
+    'Q1lCRVJHdTRyZC1Fbmlzbw==',
+    'Y3liM3JfR3U0cmQuZW4xc28=',
+    'Y3liZXItR1VBUkQuRW4xNTA=',
+    'Q3liM3IuR3U0cmQuZW4xNTA=',
+    'Q1lCM1JfR1VBUkQuRW5pc28=',
+    'Q1lCM1IuR3U0cmRlbmk1bw==',
+    'Q3liZXJHdTRyZC1FTjFTTw==',
+    'Y3liM3JfR3U0cmQuZW4xc28=',
+    'Y3liM3JfR3U0cmQuZW4xc28=',
+    'Q3liM3JfZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28=',
+    'Y3liZXJHdTRyZEVOMVNP',
+    'Q3liM3ItZ3VhcmRfRW5pc28=',
+    'Q3liM3IuR1VBUkRFbjE1MA==',
+    'Y3liM3JfR1VBUkQtM24xc28=',
+    'Q3liM3JfR3U0cmQuRW5pc28='
+  ]
 };
 
 // Using JSONBin.io as external persistent storage
@@ -90,7 +168,7 @@ export default async function handler(req, res) {
         serverTime: Date.now()
       });
     } else if (req.method === 'POST') {
-      const { action, flagIndex } = req.body;
+      const { action, flagIndex, submittedFlag } = req.body;
       const newState = { ...currentState };
 
       switch (action) {
@@ -98,13 +176,67 @@ export default async function handler(req, res) {
           newState.totalAttempts++;
           newState.lastUpdated = Date.now();
           break;
+
+        case 'validate_and_submit_flag':
+          // Check if the submitted flag matches the current active flag
+          if (typeof submittedFlag === 'string') {
+            // Get current flag (decode from base64)
+            const flagList = currentState.flagList || DEFAULT_STATE.flagList;
+            const currentActiveFlag = Buffer.from(flagList[currentState.currentFlagIndex] || '', 'base64').toString();
+            const normalizedSubmitted = submittedFlag.replace(/^flag\{|\}$/g, '');
+            const normalizedCurrent = currentActiveFlag;
+
+            console.log(`🔍 Validating flag: "${normalizedSubmitted}" against current: "${normalizedCurrent}" (index: ${currentState.currentFlagIndex})`);
+
+            if (normalizedSubmitted === normalizedCurrent || submittedFlag === `flag{${normalizedCurrent}}`) {
+              // Flag is correct - rotate immediately
+              newState.totalSolves++;
+              const oldIndex = newState.currentFlagIndex;
+              newState.currentFlagIndex = (newState.currentFlagIndex + 1) % 72;
+              newState.lastUpdated = Date.now();
+              newState.flagRotatedAt = Date.now();
+              console.log(`🎯 FLAG ACCEPTED! Rotating from ${oldIndex} to ${newState.currentFlagIndex} - Old flag is now INVALID`);
+              
+              // Return success with new flag info
+              const saved = await writeStateToStorage(newState);
+              return res.status(200).json({
+                success: true,
+                flagIndex: newState.currentFlagIndex,
+                attempts: newState.totalAttempts,
+                solves: newState.totalSolves,
+                lastUpdated: newState.lastUpdated,
+                serverTime: Date.now(),
+                message: 'Flag accepted! Flag rotated for everyone.',
+                saved: saved
+              });
+            } else {
+              // Flag is incorrect
+              newState.totalAttempts++;
+              newState.lastUpdated = Date.now();
+              console.log(`❌ FLAG REJECTED: "${normalizedSubmitted}" is not the current flag`);
+              
+              const saved = await writeStateToStorage(newState);
+              return res.status(200).json({
+                success: false,
+                flagIndex: newState.currentFlagIndex,
+                attempts: newState.totalAttempts,
+                solves: newState.totalSolves,
+                lastUpdated: newState.lastUpdated,
+                serverTime: Date.now(),
+                message: 'Invalid flag.',
+                saved: saved
+              });
+            }
+          }
+          break;
           
         case 'correct_flag':
           newState.totalSolves++;
           const oldIndex = newState.currentFlagIndex;
           newState.currentFlagIndex = (newState.currentFlagIndex + 1) % 72;
           newState.lastUpdated = Date.now();
-          console.log(`🎯 FLAG SOLVED! Rotating from ${oldIndex} to ${newState.currentFlagIndex}`);
+          newState.flagRotatedAt = Date.now(); // Track when flag was rotated
+          console.log(`🎯 FLAG SOLVED! Rotating from ${oldIndex} to ${newState.currentFlagIndex} - Old flag is now INVALID`);
           break;
           
         case 'set_flag_index':
