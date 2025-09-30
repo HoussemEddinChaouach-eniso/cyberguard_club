@@ -326,10 +326,10 @@
     <!-- flag{n0t_th1s_0ne_either} -->
     
     <script>
-        // Current flag index stored in memory
-        let currentFlagIndex = 0;
+        // Current state variables
+        let currentFlagIndex = 0; // This will be Q from server
         let attempts = 0;
-        let solves = 0;
+        let Q = 0; // Number of people who solved correctly (current flag index)
 
         // Flag rotation list - obfuscated
 const flagList = [
@@ -418,21 +418,20 @@ const flagList = [
                 
                 if (response.ok) {
                     const data = await response.json();
-                    currentFlagIndex = data.flagIndex;
-                    attempts = data.attempts;
-                    solves = data.solves;
+                    Q = data.Q || 0;
+                    currentFlagIndex = Q; // Current flag is at index Q
+                    attempts = data.attempts || 0;
                     
                     // Save server state to localStorage for offline fallback
+                    localStorage.setItem('ctf_Q', Q);
                     localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
                     localStorage.setItem('ctf_attempts', attempts);
-                    localStorage.setItem('ctf_solves', solves);
                     localStorage.setItem('ctf_last_updated', data.lastUpdated);
                     
                     console.log('✅ Loaded state from server:', {
-                        flagIndex: currentFlagIndex,
-                        attempts,
-                        solves,
-                        instanceId: data.instanceId
+                        Q: Q,
+                        currentFlagIndex: currentFlagIndex,
+                        attempts: attempts
                     });
                 } else {
                     throw new Error('Server response not ok');
@@ -440,9 +439,9 @@ const flagList = [
             } catch (error) {
                 console.error('❌ Failed to load state from server, using localStorage fallback:', error);
                 // Only use localStorage as fallback when server is completely unavailable
-                currentFlagIndex = parseInt(localStorage.getItem('ctf_current_flag_index') || '0');
+                Q = parseInt(localStorage.getItem('ctf_Q') || '0');
+                currentFlagIndex = Q;
                 attempts = parseInt(localStorage.getItem('ctf_attempts') || '0');
-                solves = parseInt(localStorage.getItem('ctf_solves') || '0');
             }
             
             updateStats();
@@ -500,11 +499,11 @@ const flagList = [
 
         function updateStats() {
             document.getElementById('attempts').textContent = attempts;
-            document.getElementById('solves').textContent = solves;
+            document.getElementById('solves').textContent = Q; // Show Q as number of solves
             
             // Save stats to localStorage only as backup (server is authoritative)
+            localStorage.setItem('ctf_Q', Q);
             localStorage.setItem('ctf_attempts', attempts);
-            localStorage.setItem('ctf_solves', solves);
             localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
             localStorage.setItem('ctf_last_updated', Date.now());
         }
@@ -545,28 +544,28 @@ const flagList = [
                     const data = await response.json();
                     
                     if (data.success) {
-                        // Flag was correct - server has already rotated
-                        solves++;
-                        currentFlagIndex = data.flagIndex;
+                        // Flag was correct - Q has been incremented
+                        Q = data.Q;
+                        currentFlagIndex = Q; // New flag is at index Q
                         attempts = data.attempts;
                         
                         updateStats();
                         document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
                         
                         // Update localStorage
+                        localStorage.setItem('ctf_Q', Q);
                         localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
                         localStorage.setItem('ctf_attempts', attempts);
-                        localStorage.setItem('ctf_solves', solves);
                         localStorage.setItem('ctf_last_updated', data.lastUpdated);
                         
                         messageEl.className = 'message success';
-                        const submissionInfo = data.submissionNumber ? 
-                            `<br><span style="font-size: 0.8em; opacity: 0.8;">Submission #${data.submissionNumber} - Flag rotated to next position</span>` : '';
+                        const solverInfo = data.solverNumber ? 
+                            `<br><span style="font-size: 0.8em; opacity: 0.8;">You are solver #${data.solverNumber} - Q is now ${Q}</span>` : '';
                         messageEl.innerHTML = `
                             ◦ ACCESS GRANTED ◦<br>
-                            <strong>TOKEN ACCEPTED</strong>${submissionInfo}<br>
+                            <strong>TOKEN ACCEPTED</strong>${solverInfo}<br>
                             <span style="font-size: 0.9em; margin-top: 10px; display: block;">
-                            Token is now invalid for everyone. Redirecting to secure channel...
+                            New flag is now active. Redirecting to secure channel...
                             </span>
                         `;
 
@@ -601,38 +600,21 @@ const flagList = [
                 const normalizedInput = input.replace(/^flag\{|\}$/g, '');
                 
                 if (normalizedInput === currentFlag || input === `flag{${currentFlag}}`) {
-                    // Try to rotate on server as fallback
-                    try {
-                        const response = await fetch('/api/flag-state', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action: 'correct_flag' })
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            currentFlagIndex = data.flagIndex;
-                            localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
-                            localStorage.setItem('ctf_last_updated', data.lastUpdated);
-                            document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
-                        }
-                    } catch (rotateError) {
-                        console.error('Failed to rotate flag on server:', rotateError);
-                        // Local fallback rotation
-                        currentFlagIndex = (currentFlagIndex + 1) % flagList.length;
-                        localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
-                        document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
-                    }
-                    
-                    solves++;
+                    Q++; // Increment Q locally as fallback
+                    currentFlagIndex = Q;
                     updateStats();
+                    
+                    // Update localStorage
+                    localStorage.setItem('ctf_Q', Q);
+                    localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                    document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
                     
                     messageEl.className = 'message success';
                     messageEl.innerHTML = `
                         ◦ ACCESS GRANTED ◦<br>
                         <strong>TOKEN ACCEPTED</strong><br>
                         <span style="font-size: 0.9em; margin-top: 10px; display: block;">
-                        Redirecting to secure channel...
+                        You are solver #${Q}. Redirecting to secure channel...
                         </span>
                     `;
 
