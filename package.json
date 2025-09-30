@@ -2,12 +2,12 @@
   "name": "cyberguards-ctf",
   "version": "1.0.0",
   "description": "ENISO CyberGuards CTF Challenge",
-  "main": "server.js",
+  "main": "index.js",
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start": "node server.js",
+    "start": "node index.js",
     "dev": "node server.js",
     "build": "echo 'No build step required'",
     "test": "echo 'No tests specified'"

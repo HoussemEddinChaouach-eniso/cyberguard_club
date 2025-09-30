@@ -3,5 +3,5 @@ services:
     name: cyberguards-ctf
     env: node
     buildCommand: npm install
-    startCommand: node server.js
+    startCommand: node index.js
     plan: free
