@@ -203,16 +203,16 @@ export default async function handler(req, res) {
               newState.submittedFlags[currentFlagKey] = previousSubmissions + 1;
               const submissionCount = newState.submittedFlags[currentFlagKey];
               
-              // Flag is correct - rotate by the number of times it has been submitted
+              // Flag is correct - rotate exactly once for each submission
               newState.totalSolves++;
               const oldIndex = newState.currentFlagIndex;
               
-              // Rotate flag by the submission count (each submission advances the flag)
-              newState.currentFlagIndex = (newState.currentFlagIndex + submissionCount) % 72;
+              // Always rotate by exactly 1 position for each correct submission
+              newState.currentFlagIndex = (newState.currentFlagIndex + 1) % 72;
               newState.lastUpdated = Date.now();
               newState.flagRotatedAt = Date.now();
               
-              console.log(`🎯 FLAG ACCEPTED! (Submission #${submissionCount}) Rotating from ${oldIndex} to ${newState.currentFlagIndex} - ${submissionCount} rotations applied`);
+              console.log(`🎯 FLAG ACCEPTED! (Submission #${submissionCount}) Rotating from ${oldIndex} to ${newState.currentFlagIndex} - Flag rotated 1 position`);
               
               // Return success with new flag info
               const saved = await writeStateToStorage(newState);
@@ -223,9 +223,9 @@ export default async function handler(req, res) {
                 solves: newState.totalSolves,
                 lastUpdated: newState.lastUpdated,
                 serverTime: Date.now(),
-                message: `Flag accepted! This was submission #${submissionCount}. Flag rotated ${submissionCount} time(s).`,
+                message: `Flag accepted! This was submission #${submissionCount}. Flag rotated to next position.`,
                 submissionNumber: submissionCount,
-                rotations: submissionCount,
+                rotations: 1,
                 saved: saved
               });
             } else {
