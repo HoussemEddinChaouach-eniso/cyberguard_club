@@ -600,6 +600,7 @@ const flagList = [
                             attempts = data.attempts || 0;
                             updateStats();
                             document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
+                            console.log('✅ RETRY SUCCESS: Set dataencrypted to:', flagList[currentFlagIndex], 'Q=', Q);
                             console.log('✅ Successfully loaded state on retry:', { Q, currentFlagIndex, attempts });
                             return;
                         }
@@ -616,12 +617,14 @@ const flagList = [
                     console.log(`📱 Fallback state: Q=${Q}, attempts=${attempts}`);
                     updateStats();
                     document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
+                    console.log(`📱 FALLBACK: Set dataencrypted to: ${flagList[currentFlagIndex]} (Q=${Q})`);
                 }, 2000);
             }
             
             updateStats();
             // Update the page attribute with current flag
             document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
+            console.log(`🔄 LOADSTATE: Set dataencrypted to: ${flagList[currentFlagIndex]} (Q=${Q})`);
         }
 
         // Poll for updates every 2 seconds to catch flag rotations from other users
