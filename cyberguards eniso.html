@@ -571,25 +571,19 @@ const flagList = [
                     serverData = data; // Store for later use
                     const serverQ = data.Q || 0;
                     
-                    // Only update if server has progressed further than our local state
-                    // This prevents server from reverting our local progression
-                    if (serverQ > Q) {
-                        Q = serverQ;
-                        currentFlagIndex = Q;
-                        attempts = data.attempts || 0;
-                        timeUntilNextRotation = data.timeUntilNextRotation || 0;
-                        
-                        console.log(`✅ Server ahead: Updated from server Q=${Q}, currentFlagIndex=${currentFlagIndex}`);
-                        
-                        // Save server state to localStorage
-                        localStorage.setItem('ctf_Q', Q);
-                        localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
-                        localStorage.setItem('ctf_attempts', attempts);
-                        localStorage.setItem('ctf_last_updated', data.lastUpdated);
-                    } else {
-                        console.log(`📊 Server Q=${serverQ} <= Local Q=${Q}, keeping local progression`);
-                        attempts = Math.max(attempts, data.attempts || 0); // Keep higher attempt count
-                    }
+                    // Always use server state as the source of truth
+                    Q = serverQ;
+                    currentFlagIndex = Q;
+                    attempts = data.attempts || 0;
+                    timeUntilNextRotation = data.timeUntilNextRotation || 0;
+                    
+                    console.log(`✅ Updated from server: Q=${Q}, currentFlagIndex=${currentFlagIndex}, attempts=${attempts}`);
+                    
+                    // Save server state to localStorage for offline fallback
+                    localStorage.setItem('ctf_Q', Q);
+                    localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                    localStorage.setItem('ctf_attempts', attempts);
+                    localStorage.setItem('ctf_last_updated', data.lastUpdated);
                     
                     console.log(`📊 Final state: Q=${Q}, currentFlagIndex=${currentFlagIndex}, attempts=${attempts}`);
                     
@@ -644,6 +638,13 @@ const flagList = [
             const serverFlag = serverData?.currentFlagEncrypted || flagList[currentFlagIndex];
             document.body.setAttribute('dataencrypted', serverFlag);
             console.log(`🔄 LOADSTATE: Set dataencrypted to: ${serverFlag} (Q=${Q})`);
+            
+            // Force update dataencrypted attribute to ensure it's set correctly
+            setTimeout(() => {
+                const finalFlag = serverData?.currentFlagEncrypted || flagList[currentFlagIndex];
+                document.body.setAttribute('dataencrypted', finalFlag);
+                console.log(`🔒 FINAL UPDATE: dataencrypted = ${finalFlag} (Q=${Q})`);
+            }, 100);
         }
 
         // Poll for updates every 2 seconds to catch flag rotations from other users

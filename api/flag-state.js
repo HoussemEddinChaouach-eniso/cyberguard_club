@@ -1,5 +1,5 @@
-// Real persistent storage using JSONBin.io (free service)
-// This ensures state persists across ALL serverless function instances
+// Real persistent storage using in-memory state (for demo purposes)
+// In production, you might want to use a database or file system
 
 const DEFAULT_STATE = {
   Q: 0, // Start with flag index 0, increments only when someone submits correct flag
@@ -88,61 +88,22 @@ const DEFAULT_STATE = {
   ]
 };
 
-// Using JSONBin.io as external persistent storage
-const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/6751a2b2ad19ca34f8c39a1e';
-const JSONBIN_MASTER_KEY = '$2a$10$VvS1FKjV5Z6WJzN4YP7P1OYYrE8xKzGp3M5D1Q9R6pX8VwF2L4N7C6';
+// In-memory state storage
+let currentState = { ...DEFAULT_STATE };
 
-// Read state from external storage
+// Read state from memory
 async function readStateFromStorage() {
-  try {
-    console.log('📡 Reading state from external storage...');
-    const response = await fetch(`${JSONBIN_URL}/latest`, {
-      method: 'GET',
-      headers: {
-        'X-Master-Key': JSONBIN_MASTER_KEY,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✅ Successfully read state from storage:', data.record);
-      return data.record;
-    } else {
-      console.warn('⚠️ Failed to read from storage, status:', response.status);
-    }
-  } catch (error) {
-    console.error('❌ Error reading from external storage:', error.message);
-  }
-  
-  console.log('🔄 Using default state');
-  return DEFAULT_STATE;
+  console.log('📡 Reading state from memory...');
+  console.log('✅ Successfully read state from memory:', currentState);
+  return currentState;
 }
 
-// Write state to external storage
+// Write state to memory
 async function writeStateToStorage(state) {
-  try {
-    console.log('💾 Writing state to external storage:', state);
-    const response = await fetch(JSONBIN_URL, {
-      method: 'PUT',
-      headers: {
-        'X-Master-Key': JSONBIN_MASTER_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(state)
-    });
-    
-    if (response.ok) {
-      console.log('✅ Successfully saved state to storage');
-      return true;
-    } else {
-      console.error('❌ Failed to save state, status:', response.status);
-    }
-  } catch (error) {
-    console.error('❌ Error writing to external storage:', error.message);
-  }
-  
-  return false;
+  console.log('💾 Writing state to memory:', state);
+  currentState = { ...state };
+  console.log('✅ Successfully saved state to memory');
+  return true;
 }
 
 async function handler(req, res) {
@@ -290,12 +251,11 @@ async function handler(req, res) {
           return res.status(400).json({ error: 'Invalid action' });
       }
 
-      // Save the updated state to external storage
+      // Save the updated state to memory
       const saved = await writeStateToStorage(newState);
       
       if (!saved) {
-        console.error('⚠️ Failed to save to external storage, returning old state');
-        newState = currentState; // Revert if save failed
+        console.error('⚠️ Failed to save to memory, this should not happen');
       }
 
       res.status(200).json({
