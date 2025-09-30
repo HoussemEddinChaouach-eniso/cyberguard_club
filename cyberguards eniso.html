@@ -452,20 +452,25 @@ const flagList = [
                     const data = await response.json();
                     
                     if (data.success) {
-                        // Flag was correct - Q has been incremented and flag rotated
-                        Q = data.Q;
-                        currentFlagIndex = Q; // New flag is at index Q
-                        attempts = data.attempts;
+                        // Flag was correct - increment to next flag immediately
+                        Q = Q + 1; // Increment locally regardless of server response
+                        currentFlagIndex = Q; // Move to next flag in list
+                        attempts = data.attempts || attempts;
+                        
+                        // Ensure we don't go beyond the flag list
+                        if (currentFlagIndex >= flagList.length) {
+                            currentFlagIndex = flagList.length - 1;
+                        }
                         
                         updateStats();
                         document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-                        console.log(`✅ SUCCESS: Updated dataencrypted to new flag: ${flagList[currentFlagIndex]} (Q=${Q})`);
+                        console.log(`✅ SUCCESS: Advanced to next flag! dataencrypted = ${flagList[currentFlagIndex]} (Q=${Q})`);
                         
-                        // Update localStorage
+                        // Update localStorage to persist the progression
                         localStorage.setItem('ctf_Q', Q);
                         localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
                         localStorage.setItem('ctf_attempts', attempts);
-                        localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                        localStorage.setItem('ctf_last_updated', Date.now());
                         
                         messageEl.className = 'message success';
                         const rotationInfo = data.rotationTriggered ? 
@@ -563,19 +568,28 @@ const flagList = [
                 if (response.ok) {
                     const data = await response.json();
                     const serverQ = data.Q || 0;
-                    Q = serverQ;
-                    currentFlagIndex = Q; // Current flag is at index Q
-                    attempts = data.attempts || 0;
-                    timeUntilNextRotation = data.timeUntilNextRotation || 0;
                     
-                    console.log(`✅ Loaded state from server: Q=${Q}, currentFlagIndex=${currentFlagIndex}, attempts=${attempts}, timeUntilNext=${Math.floor(timeUntilNextRotation/1000)}s`);
-                    console.log(`📊 Server details: usedFlags=${data.usedFlagsCount || 0}, lastUpdated=${new Date(data.lastUpdated).toLocaleTimeString()}`);
+                    // Only update if server has progressed further than our local state
+                    // This prevents server from reverting our local progression
+                    if (serverQ > Q) {
+                        Q = serverQ;
+                        currentFlagIndex = Q;
+                        attempts = data.attempts || 0;
+                        timeUntilNextRotation = data.timeUntilNextRotation || 0;
+                        
+                        console.log(`✅ Server ahead: Updated from server Q=${Q}, currentFlagIndex=${currentFlagIndex}`);
+                        
+                        // Save server state to localStorage
+                        localStorage.setItem('ctf_Q', Q);
+                        localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
+                        localStorage.setItem('ctf_attempts', attempts);
+                        localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                    } else {
+                        console.log(`📊 Server Q=${serverQ} <= Local Q=${Q}, keeping local progression`);
+                        attempts = Math.max(attempts, data.attempts || 0); // Keep higher attempt count
+                    }
                     
-                    // Save server state to localStorage for offline fallback
-                    localStorage.setItem('ctf_Q', Q);
-                    localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
-                    localStorage.setItem('ctf_attempts', attempts);
-                    localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                    console.log(`📊 Final state: Q=${Q}, currentFlagIndex=${currentFlagIndex}, attempts=${attempts}`);
                     
                     // Start countdown timer if we have rotation time
                     if (timeUntilNextRotation > 0) {
@@ -643,14 +657,14 @@ const flagList = [
                         const serverQ = data.Q || 0;
                         const serverFlagIndex = serverQ; // Current flag is always at index Q
                         
-                        // Check if Q has changed (time-based rotation occurred)
-                        if (serverQ !== Q || serverFlagIndex !== currentFlagIndex) {
-                            console.log(`🔄 State updated from server: Q changed from ${Q} to ${serverQ}`);
-                            console.log(`📡 Server sync: Q=${serverQ}, attempts=${data.attempts}`);
+                        // Only update if server has progressed further (someone else submitted)
+                        if (serverQ > Q) {
+                            console.log(`🔄 Server ahead: Q changed from ${Q} to ${serverQ}`);
+                            console.log(`📡 Someone else submitted: Q=${serverQ}, attempts=${data.attempts}`);
                             
                             const oldQ = Q;
                             Q = serverQ;
-                            currentFlagIndex = serverFlagIndex;
+                            currentFlagIndex = serverQ;
                             attempts = data.attempts || 0;
                             
                             // Update timer info if available
@@ -662,7 +676,7 @@ const flagList = [
                             // Update UI
                             updateStats();
                             document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-                            console.log(`🔄 POLLING: Updated dataencrypted to new flag: ${flagList[currentFlagIndex]} (Q=${Q})`);
+                            console.log(`🔄 POLLING: Advanced to flag: ${flagList[currentFlagIndex]} (Q=${Q})`);
                             
                             // Save to localStorage for offline fallback
                             localStorage.setItem('ctf_Q', Q);
@@ -685,6 +699,8 @@ const flagList = [
                                     messageEl.style.display = 'none';
                                 }, 6000);
                             }
+                        } else {
+                            console.log(`📊 Polling: Server Q=${serverQ} <= Local Q=${Q}, keeping local state`);
                         }
                     }
                 } catch (error) {
