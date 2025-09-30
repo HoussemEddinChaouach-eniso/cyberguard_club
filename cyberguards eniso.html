@@ -452,19 +452,17 @@ const flagList = [
                     const data = await response.json();
                     
                     if (data.success) {
-                        // Flag was correct - increment to next flag immediately
-                        Q = Q + 1; // Increment locally regardless of server response
+                        // Flag was correct - use server-provided data for perfect sync
+                        Q = data.newQ || data.Q; // Use server's new Q value
                         currentFlagIndex = Q; // Move to next flag in list
                         attempts = data.attempts || attempts;
                         
-                        // Ensure we don't go beyond the flag list
-                        if (currentFlagIndex >= flagList.length) {
-                            currentFlagIndex = flagList.length - 1;
-                        }
+                        // Use server-provided encrypted flag to ensure perfect sync
+                        const newEncryptedFlag = data.currentFlagEncrypted || flagList[currentFlagIndex] || flagList[Q];
                         
                         updateStats();
-                        document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-                        console.log(`✅ SUCCESS: Advanced to next flag! dataencrypted = ${flagList[currentFlagIndex]} (Q=${Q})`);
+                        document.body.setAttribute('dataencrypted', newEncryptedFlag);
+                        console.log(`✅ SUCCESS: Advanced to next flag! dataencrypted = ${newEncryptedFlag} (Q=${Q})`);
                         
                         // Update localStorage to persist the progression
                         localStorage.setItem('ctf_Q', Q);
@@ -519,8 +517,10 @@ const flagList = [
                                         Q = refreshData.Q;
                                         currentFlagIndex = Q;
                                         updateStats();
-                                        document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-                                        console.log(`🔄 BLOCKED REFRESH: Updated dataencrypted to: ${flagList[currentFlagIndex]} (Q=${Q})`);
+                                        // Use server-provided encrypted flag for perfect sync
+                                        const serverEncryptedFlag = refreshData.currentFlagEncrypted || flagList[currentFlagIndex];
+                                        document.body.setAttribute('dataencrypted', serverEncryptedFlag);
+                                        console.log(`🔄 BLOCKED REFRESH: Updated dataencrypted to: ${serverEncryptedFlag} (Q=${Q})`);
                                     }
                                 } catch (error) {
                                     console.error('Failed to refresh flag state:', error);
@@ -556,6 +556,7 @@ const flagList = [
 
         // Load state from server API with better error handling
         async function loadState() {
+            let serverData = null;
             try {
                 console.log('📡 Fetching current state from server...');
                 const response = await fetch('/api/flag-state', {
@@ -567,6 +568,7 @@ const flagList = [
                 
                 if (response.ok) {
                     const data = await response.json();
+                    serverData = data; // Store for later use
                     const serverQ = data.Q || 0;
                     
                     // Only update if server has progressed further than our local state
@@ -613,8 +615,10 @@ const flagList = [
                             currentFlagIndex = Q;
                             attempts = data.attempts || 0;
                             updateStats();
-                            document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-                            console.log('✅ RETRY SUCCESS: Set dataencrypted to:', flagList[currentFlagIndex], 'Q=', Q);
+                            // Use server-provided encrypted flag for perfect sync
+                            const serverEncryptedFlag = data.currentFlagEncrypted || flagList[currentFlagIndex];
+                            document.body.setAttribute('dataencrypted', serverEncryptedFlag);
+                            console.log('✅ RETRY SUCCESS: Set dataencrypted to:', serverEncryptedFlag, 'Q=', Q);
                             console.log('✅ Successfully loaded state on retry:', { Q, currentFlagIndex, attempts });
                             return;
                         }
@@ -636,9 +640,10 @@ const flagList = [
             }
             
             updateStats();
-            // Update the page attribute with current flag
-            document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-            console.log(`🔄 LOADSTATE: Set dataencrypted to: ${flagList[currentFlagIndex]} (Q=${Q})`);
+            // Update the page attribute with current flag - use server data if available
+            const serverFlag = serverData?.currentFlagEncrypted || flagList[currentFlagIndex];
+            document.body.setAttribute('dataencrypted', serverFlag);
+            console.log(`🔄 LOADSTATE: Set dataencrypted to: ${serverFlag} (Q=${Q})`);
         }
 
         // Poll for updates every 2 seconds to catch flag rotations from other users
@@ -675,8 +680,10 @@ const flagList = [
                             
                             // Update UI
                             updateStats();
-                            document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-                            console.log(`🔄 POLLING: Advanced to flag: ${flagList[currentFlagIndex]} (Q=${Q})`);
+                            // Use server-provided encrypted flag for perfect sync
+                            const serverEncryptedFlag = data.currentFlagEncrypted || flagList[currentFlagIndex];
+                            document.body.setAttribute('dataencrypted', serverEncryptedFlag);
+                            console.log(`🔄 POLLING: Advanced to flag: ${serverEncryptedFlag} (Q=${Q})`);
                             
                             // Save to localStorage for offline fallback
                             localStorage.setItem('ctf_Q', Q);
@@ -736,9 +743,9 @@ const flagList = [
             }
         }
 
-        // Hidden flag in page (inspectable)
+        // Hidden flag in page (inspectable) - will be updated after server load
         document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-        console.log(`🚀 INITIAL: Set dataencrypted to: ${flagList[currentFlagIndex]} (Q=${Q})`);
+        console.log(`🚀 INITIAL: Set dataencrypted to: ${flagList[currentFlagIndex]} (Q=${Q}) - will update from server`);
 
         // Allow Enter key to submit
         document.getElementById('flagInput').addEventListener('keypress', function(e) {

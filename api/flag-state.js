@@ -180,7 +180,8 @@ async function handler(req, res) {
         rotationMode: 'submission-based',
         serverTime: Date.now(),
         usedFlagsCount: Object.keys(currentState.usedFlags || {}).length,
-        currentFlagContent: currentFlagContent // For debugging
+        currentFlagContent: currentFlagContent, // For debugging
+        currentFlagEncrypted: flagList[currentState.Q] || '' // Provide current encrypted flag for dataencrypted
       });
     } else if (req.method === 'POST') {
       const { action, flagIndex, submittedFlag } = req.body;
@@ -255,6 +256,7 @@ async function handler(req, res) {
                 previousQ: currentState.Q,
                 newQ: newState.Q,
                 globalRefresh: true, // Signal to refresh all clients
+                currentFlagEncrypted: flagList[newState.Q] || '', // Provide new encrypted flag for dataencrypted
                 saved: saved
               });
             } else {
