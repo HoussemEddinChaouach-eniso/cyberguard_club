@@ -5,6 +5,7 @@ const DEFAULT_STATE = {
   Q: 0, // Number of people who submitted the right flag (current flag index)
   totalAttempts: 0,
   lastUpdated: Date.now(),
+  usedFlags: {}, // Track which flags have been used: { "flagContent": true }
   flagList: [
     'QzdCM1JfR1U0UkRfRW4xNTA=',
     'Q3liM3JHdTRyZEVuMTVv',
@@ -159,12 +160,18 @@ export default async function handler(req, res) {
     let currentState = await readStateFromStorage();
 
     if (req.method === 'GET') {
+      // Get current flag content for verification
+      const flagList = currentState.flagList || DEFAULT_STATE.flagList;
+      const currentFlagContent = Buffer.from(flagList[currentState.Q] || '', 'base64').toString();
+      
       res.status(200).json({
         Q: currentState.Q,
         currentFlag: currentState.Q, // Current flag index is Q
         attempts: currentState.totalAttempts,
         lastUpdated: currentState.lastUpdated,
-        serverTime: Date.now()
+        serverTime: Date.now(),
+        usedFlagsCount: Object.keys(currentState.usedFlags || {}).length,
+        currentFlagContent: currentFlagContent // For debugging only
       });
     } else if (req.method === 'POST') {
       const { action, flagIndex, submittedFlag } = req.body;
@@ -187,12 +194,40 @@ export default async function handler(req, res) {
 
             console.log(`🔍 Validating flag: "${normalizedSubmitted}" against current: "${normalizedCurrent}" (Q=${currentState.Q})`);
 
+            // Initialize usedFlags if it doesn't exist
+            if (!newState.usedFlags) {
+              newState.usedFlags = {};
+            }
+
+            // Check if this specific flag has already been used
+            const flagKey = normalizedCurrent; // Use the actual flag content as key
+            if (newState.usedFlags[flagKey]) {
+              // This flag has already been submitted by someone else
+              newState.totalAttempts++;
+              newState.lastUpdated = Date.now();
+              console.log(`❌ FLAG ALREADY USED: "${normalizedSubmitted}" was already submitted by someone else`);
+              
+              const saved = await writeStateToStorage(newState);
+              return res.status(200).json({
+                success: false,
+                Q: newState.Q,
+                currentFlag: newState.Q,
+                attempts: newState.totalAttempts,
+                lastUpdated: newState.lastUpdated,
+                serverTime: Date.now(),
+                message: 'This flag has already been submitted by someone else. Try the current active flag.',
+                flagExpired: true,
+                saved: saved
+              });
+            }
+
             if (normalizedSubmitted === normalizedCurrent || submittedFlag === `flag{${normalizedCurrent}}`) {
-              // Flag is correct - increment Q (number of people who submitted correctly)
+              // Flag is correct and hasn't been used yet - mark it as used and increment Q
+              newState.usedFlags[flagKey] = true; // Mark this flag as used
               newState.Q = currentState.Q + 1;
               newState.lastUpdated = Date.now();
               
-              console.log(`🎯 FLAG ACCEPTED! Q incremented from ${currentState.Q} to ${newState.Q}. New flag is at index ${newState.Q}`);
+              console.log(`🎯 FLAG ACCEPTED! "${normalizedCurrent}" marked as used. Q incremented from ${currentState.Q} to ${newState.Q}. New flag is at index ${newState.Q}`);
               
               // Return success with new flag info
               const saved = await writeStateToStorage(newState);
@@ -203,7 +238,7 @@ export default async function handler(req, res) {
                 attempts: newState.totalAttempts,
                 lastUpdated: newState.lastUpdated,
                 serverTime: Date.now(),
-                message: `Flag accepted! You are person #${currentState.Q + 1} to solve this. New flag is now active.`,
+                message: `Flag accepted! You are person #${currentState.Q + 1} to solve this. This flag is now permanently invalid.`,
                 solverNumber: currentState.Q + 1,
                 saved: saved
               });
