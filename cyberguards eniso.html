@@ -317,6 +317,8 @@
             <strong>◦ HINT:</strong> Sometimes what appears empty contains the most valuable secrets. Look beyond the surface...
             <br><br>
             <strong>◦ ROTATION:</strong> Tokens auto-rotate every 10 minutes. Multiple people can submit the same token!
+            <br><br>
+            <strong>◦ AUTO-REFRESH:</strong> Page refreshes every 5 minutes to ensure you have the latest token.
         </div>
 
         <div class="stats" id="stats">
@@ -501,14 +503,18 @@ const flagList = [
             setInterval(async () => {
                 try {
                     const response = await fetch('/api/flag-state', {
-                        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+                        headers: { 
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
+                        }
                     });
                     if (response.ok) {
                         const data = await response.json();
                         const serverQ = data.Q || 0;
                         const serverFlagIndex = serverQ; // Current flag is always at index Q
                         
-                        // Check if Q has changed (someone solved a flag)
+                        // Check if Q has changed (time-based rotation occurred)
                         if (serverQ !== Q || serverFlagIndex !== currentFlagIndex) {
                             console.log(`🔄 State updated from server: Q changed from ${Q} to ${serverQ}`);
                             console.log(`📡 Server sync: Q=${serverQ}, attempts=${data.attempts}`);
@@ -555,6 +561,15 @@ const flagList = [
                     console.log('Polling failed:', error.message);
                 }
             }, 2000); // Poll every 2 seconds for faster synchronization
+        }
+
+        // Auto-refresh page every 5 minutes to ensure fresh state
+        function startAutoRefresh() {
+            console.log('🔄 Auto-refresh enabled: Page will reload every 5 minutes');
+            setInterval(() => {
+                console.log('🔄 Auto-refreshing page to ensure fresh flag state...');
+                window.location.reload(true); // Force reload from server
+            }, 5 * 60 * 1000); // 5 minutes
         }
 
         function updateStats() {
@@ -753,12 +768,17 @@ const flagList = [
             console.log(`✅ Initialization complete: Q=${Q}, currentFlagIndex=${currentFlagIndex}`);
             // Start polling for updates after initial load
             startPolling();
+            // Start auto-refresh every 5 minutes
+            startAutoRefresh();
         }).catch((error) => {
             console.error('❌ Failed to initialize:', error);
             // Force retry initialization
             setTimeout(() => {
                 console.log('🔄 Retrying initialization...');
-                loadState().then(() => startPolling());
+                loadState().then(() => {
+                    startPolling();
+                    startAutoRefresh();
+                });
             }, 3000);
         });
     </script>

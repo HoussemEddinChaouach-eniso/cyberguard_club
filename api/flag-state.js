@@ -204,8 +204,10 @@ export default async function handler(req, res) {
       // Calculate time until next rotation
       const now = Date.now();
       const timeSinceLastRotation = now - (currentState.lastRotation || now);
-      const rotationInterval = currentState.rotationInterval || (15 * 60 * 1000);
+      const rotationInterval = currentState.rotationInterval || (10 * 60 * 1000);
       const timeUntilNextRotation = rotationInterval - (timeSinceLastRotation % rotationInterval);
+      
+      console.log(`📊 GET Request - Q=${currentState.Q}, Flag="${currentFlagContent}", TimeUntilNext=${Math.floor(timeUntilNextRotation/1000)}s, TimeSinceRotation=${Math.floor(timeSinceLastRotation/1000)}s`);
       
       res.status(200).json({
         Q: currentState.Q,
@@ -218,7 +220,9 @@ export default async function handler(req, res) {
         rotationIntervalMinutes: rotationInterval / 60000,
         serverTime: Date.now(),
         usedFlagsCount: Object.keys(currentState.usedFlags || {}).length,
-        currentFlagContent: currentFlagContent // For debugging only
+        currentFlagContent: currentFlagContent, // For debugging
+        timeSinceLastRotation: timeSinceLastRotation,
+        rotationDue: timeSinceLastRotation >= rotationInterval
       });
     } else if (req.method === 'POST') {
       const { action, flagIndex, submittedFlag } = req.body;
