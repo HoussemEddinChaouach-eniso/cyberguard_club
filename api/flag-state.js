@@ -2,12 +2,12 @@
 // This ensures state persists across ALL serverless function instances
 
 const DEFAULT_STATE = {
-  Q: 0, // Start with flag index 0 and only increment when flags are solved
+  Q: 0, // Start with flag index 0, will auto-rotate every 10 minutes
   totalAttempts: 0,
   lastUpdated: Date.now(),
   lastRotation: Date.now(), // Track when flag was last rotated
-  usedFlags: {}, // Track which flags have been used: { "flagContent": true }
-  rotationInterval: 15 * 60 * 1000, // 15 minutes in milliseconds
+  usedFlags: {}, // Keep for reference but don't block reuse
+  rotationInterval: 10 * 60 * 1000, // 10 minutes in milliseconds
   flagList: [
     'QzdCM1JfR1U0UkRfRW4xNTA=',
     'Q3liM3JHdTRyZEVuMTVv',
@@ -149,7 +149,7 @@ async function writeStateToStorage(state) {
 function checkTimeBasedRotation(currentState) {
   const now = Date.now();
   const timeSinceLastRotation = now - (currentState.lastRotation || now);
-  const rotationInterval = currentState.rotationInterval || (15 * 60 * 1000); // 15 minutes default
+  const rotationInterval = currentState.rotationInterval || (10 * 60 * 1000); // 10 minutes default
   
   if (timeSinceLastRotation >= rotationInterval) {
     console.log(`⏰ AUTO-ROTATION: ${Math.floor(timeSinceLastRotation / 60000)} minutes elapsed, rotating flag`);
@@ -241,43 +241,32 @@ export default async function handler(req, res) {
 
             console.log(`🔍 Validating flag: "${normalizedSubmitted}" against current: "${normalizedCurrent}" (Q=${currentState.Q})`);
 
-            // Initialize usedFlags if it doesn't exist
+            // Initialize usedFlags if it doesn't exist (for tracking/stats only)
             if (!newState.usedFlags) {
               newState.usedFlags = {};
             }
 
-            // Check if this specific flag has already been used
-            const flagKey = normalizedCurrent; // Use the actual flag content as key
-            if (newState.usedFlags[flagKey]) {
-              // This flag has already been submitted by someone else
+            if (normalizedSubmitted === normalizedCurrent || submittedFlag === `flag{${normalizedCurrent}}`) {
+              // Flag is correct - allow submission without rotating (time-based rotation only)
               newState.totalAttempts++;
               newState.lastUpdated = Date.now();
-              console.log(`❌ FLAG ALREADY USED: "${normalizedSubmitted}" was already submitted by someone else`);
               
-              const saved = await writeStateToStorage(newState);
-              return res.status(200).json({
-                success: false,
-                Q: newState.Q,
-                currentFlag: newState.Q,
-                attempts: newState.totalAttempts,
-                lastUpdated: newState.lastUpdated,
-                serverTime: Date.now(),
-                message: 'This flag has already been submitted by someone else. Try the current active flag.',
-                flagExpired: true,
-                saved: saved
-              });
-            }
-
-            if (normalizedSubmitted === normalizedCurrent || submittedFlag === `flag{${normalizedCurrent}}`) {
-              // Flag is correct and hasn't been used yet - mark it as used and increment Q
-              newState.usedFlags[flagKey] = true; // Mark this flag as used
-              newState.Q = (currentState.Q + 1) % 72; // Manual rotation on correct submission
-              newState.lastRotation = Date.now(); // Reset rotation timer on manual rotation
-              newState.lastUpdated = Date.now();
+              // Track successful submissions for statistics
+              const flagKey = normalizedCurrent;
+              if (!newState.usedFlags[flagKey]) {
+                newState.usedFlags[flagKey] = 0;
+              }
+              newState.usedFlags[flagKey]++;
               
-              console.log(`🎯 FLAG ACCEPTED! "${normalizedCurrent}" marked as used. Q incremented from ${currentState.Q} to ${newState.Q}. Rotation timer reset.`);
+              console.log(`🎯 FLAG ACCEPTED! "${normalizedCurrent}" (submission #${newState.usedFlags[flagKey]}). Q remains ${currentState.Q}.`);
               
-              // Return success with new flag info
+              // Calculate time until next rotation
+              const now = Date.now();
+              const timeSinceLastRotation = now - (currentState.lastRotation || now);
+              const rotationInterval = currentState.rotationInterval || (10 * 60 * 1000);
+              const timeUntilNextRotation = rotationInterval - (timeSinceLastRotation % rotationInterval);
+              
+              // Return success without changing Q
               const saved = await writeStateToStorage(newState);
               return res.status(200).json({
                 success: true,
@@ -285,11 +274,11 @@ export default async function handler(req, res) {
                 currentFlag: newState.Q,
                 attempts: newState.totalAttempts,
                 lastUpdated: newState.lastUpdated,
-                timeUntilNextRotation: newState.rotationInterval || (15 * 60 * 1000),
+                timeUntilNextRotation: Math.max(0, timeUntilNextRotation),
                 serverTime: Date.now(),
-                message: `Flag accepted! You are person #${currentState.Q + 1} to solve this. This flag is now permanently invalid. Timer reset!`,
-                solverNumber: currentState.Q + 1,
-                timerReset: true,
+                message: `Flag accepted! Submission #${newState.usedFlags[flagKey]} for this flag. Next rotation in ${Math.ceil(timeUntilNextRotation/60000)} minutes.`,
+                submissionNumber: newState.usedFlags[flagKey],
+                nextRotationIn: Math.ceil(timeUntilNextRotation / 60000),
                 saved: saved
               });
             } else {
