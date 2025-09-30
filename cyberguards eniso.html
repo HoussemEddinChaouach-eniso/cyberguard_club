@@ -459,6 +459,7 @@ const flagList = [
                         
                         updateStats();
                         document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
+                        console.log(`✅ SUCCESS: Updated dataencrypted to new flag: ${flagList[currentFlagIndex]} (Q=${Q})`);
                         
                         // Update localStorage
                         localStorage.setItem('ctf_Q', Q);
@@ -514,7 +515,7 @@ const flagList = [
                                         currentFlagIndex = Q;
                                         updateStats();
                                         document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
-                                        console.log(`🔄 Refreshed to current flag: Q=${Q}`);
+                                        console.log(`🔄 BLOCKED REFRESH: Updated dataencrypted to: ${flagList[currentFlagIndex]} (Q=${Q})`);
                                     }
                                 } catch (error) {
                                     console.error('Failed to refresh flag state:', error);
@@ -658,6 +659,7 @@ const flagList = [
                             // Update UI
                             updateStats();
                             document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
+                            console.log(`🔄 POLLING: Updated dataencrypted to new flag: ${flagList[currentFlagIndex]} (Q=${Q})`);
                             
                             // Save to localStorage for offline fallback
                             localStorage.setItem('ctf_Q', Q);
@@ -717,6 +719,7 @@ const flagList = [
 
         // Hidden flag in page (inspectable)
         document.body.setAttribute('dataencrypted', flagList[currentFlagIndex]);
+        console.log(`🚀 INITIAL: Set dataencrypted to: ${flagList[currentFlagIndex]} (Q=${Q})`);
 
         // Allow Enter key to submit
         document.getElementById('flagInput').addEventListener('keypress', function(e) {
