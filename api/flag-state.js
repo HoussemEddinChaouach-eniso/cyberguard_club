@@ -2,12 +2,12 @@
 // This ensures state persists across ALL serverless function instances
 
 const DEFAULT_STATE = {
-  Q: 0, // Start with flag index 0, will auto-rotate every 10 minutes
+  Q: 0, // Start with flag index 0, increments only when someone submits correct flag
   totalAttempts: 0,
   lastUpdated: Date.now(),
   lastRotation: Date.now(), // Track when flag was last rotated
-  usedFlags: {}, // Keep for reference but don't block reuse
-  rotationInterval: 10 * 60 * 1000, // 10 minutes in milliseconds
+  usedFlags: {}, // Track which flags have been used and blocked
+  rotationTrigger: 'submission-based', // Rotation happens on correct submissions only
   flagList: [
     'QzdCM1JfR1U0UkRfRW4xNTA=',
     'Q3liM3JHdTRyZEVuMTVv',
@@ -145,32 +145,6 @@ async function writeStateToStorage(state) {
   return false;
 }
 
-// Check if flag needs automatic rotation based on time
-function checkTimeBasedRotation(currentState) {
-  const now = Date.now();
-  const timeSinceLastRotation = now - (currentState.lastRotation || now);
-  const rotationInterval = currentState.rotationInterval || (10 * 60 * 1000); // 10 minutes default
-  
-  if (timeSinceLastRotation >= rotationInterval) {
-    console.log(`⏰ AUTO-ROTATION: ${Math.floor(timeSinceLastRotation / 60000)} minutes elapsed, rotating flag`);
-    
-    // Calculate how many rotations we've missed
-    const missedRotations = Math.floor(timeSinceLastRotation / rotationInterval);
-    const newQ = (currentState.Q + missedRotations) % 72;
-    
-    return {
-      ...currentState,
-      Q: newQ,
-      lastRotation: now - (timeSinceLastRotation % rotationInterval), // Align to rotation schedule
-      lastUpdated: now,
-      autoRotated: true,
-      missedRotations: missedRotations
-    };
-  }
-  
-  return currentState;
-}
-
 async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -187,27 +161,15 @@ async function handler(req, res) {
     // Always read current state from external storage
     let currentState = await readStateFromStorage();
     
-    // Check if flag needs automatic time-based rotation
-    const rotatedState = checkTimeBasedRotation(currentState);
-    if (rotatedState.autoRotated) {
-      console.log(`🔄 AUTO-ROTATION: Flag rotated from ${currentState.Q} to ${rotatedState.Q} due to time (${rotatedState.missedRotations} rotations)`);
-      currentState = rotatedState;
-      // Save the auto-rotated state
-      await writeStateToStorage(currentState);
-    }
+    // No automatic time-based rotation - only submission-based rotation
+    console.log(`� Current state: Q=${currentState.Q}, usedFlags=${Object.keys(currentState.usedFlags || {}).length}`);
 
     if (req.method === 'GET') {
       // Get current flag content for verification
       const flagList = currentState.flagList || DEFAULT_STATE.flagList;
       const currentFlagContent = Buffer.from(flagList[currentState.Q] || '', 'base64').toString();
       
-      // Calculate time until next rotation
-      const now = Date.now();
-      const timeSinceLastRotation = now - (currentState.lastRotation || now);
-      const rotationInterval = currentState.rotationInterval || (10 * 60 * 1000);
-      const timeUntilNextRotation = rotationInterval - (timeSinceLastRotation % rotationInterval);
-      
-      console.log(`📊 GET Request - Q=${currentState.Q}, Flag="${currentFlagContent}", TimeUntilNext=${Math.floor(timeUntilNextRotation/1000)}s, TimeSinceRotation=${Math.floor(timeSinceLastRotation/1000)}s`);
+      console.log(`📊 GET Request - Q=${currentState.Q}, Flag="${currentFlagContent}", Mode=submission-based`);
       
       res.status(200).json({
         Q: currentState.Q,
@@ -215,14 +177,10 @@ async function handler(req, res) {
         attempts: currentState.totalAttempts,
         lastUpdated: currentState.lastUpdated,
         lastRotation: currentState.lastRotation,
-        timeUntilNextRotation: Math.max(0, timeUntilNextRotation),
-        nextRotationAt: now + timeUntilNextRotation,
-        rotationIntervalMinutes: rotationInterval / 60000,
+        rotationMode: 'submission-based',
         serverTime: Date.now(),
         usedFlagsCount: Object.keys(currentState.usedFlags || {}).length,
-        currentFlagContent: currentFlagContent, // For debugging
-        timeSinceLastRotation: timeSinceLastRotation,
-        rotationDue: timeSinceLastRotation >= rotationInterval
+        currentFlagContent: currentFlagContent // For debugging
       });
     } else if (req.method === 'POST') {
       const { action, flagIndex, submittedFlag } = req.body;
@@ -245,32 +203,45 @@ async function handler(req, res) {
 
             console.log(`🔍 Validating flag: "${normalizedSubmitted}" against current: "${normalizedCurrent}" (Q=${currentState.Q})`);
 
-            // Initialize usedFlags if it doesn't exist (for tracking/stats only)
+            // Initialize usedFlags if it doesn't exist
             if (!newState.usedFlags) {
               newState.usedFlags = {};
             }
 
+            // Check if this specific flag has already been used and blocked
+            const flagKey = normalizedCurrent;
+            if (newState.usedFlags[flagKey]) {
+              // This flag has already been submitted and is blocked
+              newState.totalAttempts++;
+              newState.lastUpdated = Date.now();
+              console.log(`❌ FLAG BLOCKED: "${normalizedSubmitted}" was already submitted and is now invalid`);
+              
+              const saved = await writeStateToStorage(newState);
+              return res.status(200).json({
+                success: false,
+                Q: newState.Q,
+                currentFlag: newState.Q,
+                attempts: newState.totalAttempts,
+                lastUpdated: newState.lastUpdated,
+                serverTime: Date.now(),
+                message: 'This flag has already been submitted and is now blocked. Try the current active flag.',
+                flagBlocked: true,
+                rotationTriggered: false,
+                saved: saved
+              });
+            }
+
             if (normalizedSubmitted === normalizedCurrent || submittedFlag === `flag{${normalizedCurrent}}`) {
-              // Flag is correct - allow submission without rotating (time-based rotation only)
+              // Flag is correct and hasn't been used yet - ROTATE TO NEXT FLAG
+              newState.usedFlags[flagKey] = true; // Block this flag permanently
+              newState.Q = (currentState.Q + 1) % 72; // Rotate to next flag
+              newState.lastRotation = Date.now(); // Update rotation timestamp
               newState.totalAttempts++;
               newState.lastUpdated = Date.now();
               
-              // Track successful submissions for statistics
-              const flagKey = normalizedCurrent;
-              if (!newState.usedFlags[flagKey]) {
-                newState.usedFlags[flagKey] = 0;
-              }
-              newState.usedFlags[flagKey]++;
+              console.log(`🎯 FLAG ACCEPTED & ROTATED! "${normalizedCurrent}" blocked. Q incremented from ${currentState.Q} to ${newState.Q}.`);
               
-              console.log(`🎯 FLAG ACCEPTED! "${normalizedCurrent}" (submission #${newState.usedFlags[flagKey]}). Q remains ${currentState.Q}.`);
-              
-              // Calculate time until next rotation
-              const now = Date.now();
-              const timeSinceLastRotation = now - (currentState.lastRotation || now);
-              const rotationInterval = currentState.rotationInterval || (10 * 60 * 1000);
-              const timeUntilNextRotation = rotationInterval - (timeSinceLastRotation % rotationInterval);
-              
-              // Return success without changing Q
+              // Return success with rotation info
               const saved = await writeStateToStorage(newState);
               return res.status(200).json({
                 success: true,
@@ -278,11 +249,12 @@ async function handler(req, res) {
                 currentFlag: newState.Q,
                 attempts: newState.totalAttempts,
                 lastUpdated: newState.lastUpdated,
-                timeUntilNextRotation: Math.max(0, timeUntilNextRotation),
                 serverTime: Date.now(),
-                message: `Flag accepted! Submission #${newState.usedFlags[flagKey]} for this flag. Next rotation in ${Math.ceil(timeUntilNextRotation/60000)} minutes.`,
-                submissionNumber: newState.usedFlags[flagKey],
-                nextRotationIn: Math.ceil(timeUntilNextRotation / 60000),
+                message: `Flag accepted! Rotating to next flag. This flag is now permanently blocked.`,
+                rotationTriggered: true,
+                previousQ: currentState.Q,
+                newQ: newState.Q,
+                globalRefresh: true, // Signal to refresh all clients
                 saved: saved
               });
             } else {

@@ -301,7 +301,7 @@
             <p><strong>CLASSIFIED:</strong> Restricted access zone detected.</p>
             <p style="margin-top: 10px;">Authentication token required for entry...</p>
             <p style="margin-top: 10px; font-size: 0.85em; color: rgba(255,255,255,0.7);">
-                <strong>⏰ TIME-BASED ROTATION:</strong> Current token changes every 10 minutes automatically.
+                <strong>⚡ SUBMISSION-BASED ROTATION:</strong> When someone submits the correct token, it immediately rotates to the next one and becomes permanently blocked.
             </p>
         </div>
 
@@ -316,9 +316,9 @@
         <div class="hint">
             <strong>◦ HINT:</strong> Sometimes what appears empty contains the most valuable secrets. Look beyond the surface...
             <br><br>
-            <strong>◦ ROTATION:</strong> Tokens auto-rotate every 10 minutes. Multiple people can submit the same token!
+            <strong>◦ ROTATION:</strong> Each token can only be used ONCE! When someone submits it correctly, it becomes blocked forever and rotates to the next one.
             <br><br>
-            <strong>◦ AUTO-REFRESH:</strong> Page refreshes every 5 minutes to ensure you have the latest token.
+            <strong>◦ RACE:</strong> Be fast! Once someone else submits the current token, you'll need to find the new one.
         </div>
 
         <div class="stats" id="stats">
@@ -540,20 +540,20 @@ const flagList = [
                             localStorage.setItem('ctf_attempts', attempts);
                             localStorage.setItem('ctf_last_updated', data.lastUpdated);
                             
-                            // Show a notification that the flag changed (only if Q actually incremented)
+                            // Show a notification that the flag changed (submission-based rotation)
                             if (serverQ > oldQ) {
                                 const messageEl = document.getElementById('message');
                                 messageEl.className = 'message success';
                                 messageEl.innerHTML = `
-                                    ⏰ TOKEN ROTATED ⏰<br>
-                                    New token is now active (10-minute rotation)<br>
+                                    ⚡ TOKEN ROTATED ⚡<br>
+                                    Someone submitted the correct token!<br>
                                     <span style="font-size: 0.8em; margin-top: 5px; display: block;">
-                                    Previous token is still valid. Current Q: ${Q}.
+                                    Previous token is now BLOCKED. New token active: Q=${Q}.
                                     </span>
                                 `;
                                 setTimeout(() => {
                                     messageEl.style.display = 'none';
-                                }, 5000);
+                                }, 6000);
                             }
                         }
                     }
@@ -563,14 +563,7 @@ const flagList = [
             }, 2000); // Poll every 2 seconds for faster synchronization
         }
 
-        // Auto-refresh page every 5 minutes to ensure fresh state
-        function startAutoRefresh() {
-            console.log('🔄 Auto-refresh enabled: Page will reload every 5 minutes');
-            setInterval(() => {
-                console.log('🔄 Auto-refreshing page to ensure fresh flag state...');
-                window.location.reload(true); // Force reload from server
-            }, 5 * 60 * 1000); // 5 minutes
-        }
+        // Function to refresh all users when flag rotates
 
         function updateStats() {
             document.getElementById('attempts').textContent = attempts;
@@ -590,35 +583,10 @@ const flagList = [
 
         // Start countdown timer for flag rotation
         function startCountdown() {
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-            
-            if (timeUntilNextRotation > 0) {
-                countdownInterval = setInterval(() => {
-                    timeUntilNextRotation -= 1000;
-                    
-                    if (timeUntilNextRotation <= 0) {
-                        clearInterval(countdownInterval);
-                        // Flag should rotate, refresh from server
-                        loadState();
-                        return;
-                    }
-                    
-                    // Update timer display
-                    const minutes = Math.floor(timeUntilNextRotation / 60000);
-                    const seconds = Math.floor((timeUntilNextRotation % 60000) / 1000);
-                    const timerEl = document.getElementById('timer');
-                    if (timerEl) {
-                        timerEl.textContent = `Next token rotation: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-                    }
-                }, 1000);
-            } else {
-                // No timer info, show static message
-                const timerEl = document.getElementById('timer');
-                if (timerEl) {
-                    timerEl.textContent = 'Tokens rotate every 10 minutes automatically';
-                }
+            // No countdown needed for submission-based rotation
+            const timerEl = document.getElementById('timer');
+            if (timerEl) {
+                timerEl.textContent = 'Tokens rotate when someone submits the correct one';
             }
         }
 
@@ -653,9 +621,9 @@ const flagList = [
                     const data = await response.json();
                     
                     if (data.success) {
-                        // Flag was correct - no Q change, just success message
+                        // Flag was correct - Q has been incremented and flag rotated
                         Q = data.Q;
-                        currentFlagIndex = Q; // Current flag stays the same
+                        currentFlagIndex = Q; // New flag is at index Q
                         attempts = data.attempts;
                         
                         updateStats();
@@ -668,23 +636,69 @@ const flagList = [
                         localStorage.setItem('ctf_last_updated', data.lastUpdated);
                         
                         messageEl.className = 'message success';
-                        const submissionInfo = data.submissionNumber ? 
-                            `<br><span style="font-size: 0.8em; opacity: 0.8;">Submission #${data.submissionNumber} for this token</span>` : '';
-                        const rotationInfo = data.nextRotationIn ? 
-                            `<br><span style="font-size: 0.8em; opacity: 0.8;">Next rotation in ${data.nextRotationIn} minutes</span>` : '';
+                        const rotationInfo = data.rotationTriggered ? 
+                            `<br><span style="font-size: 0.8em; opacity: 0.8;">Flag rotated from Q=${data.previousQ} to Q=${data.newQ}</span>` : '';
                         messageEl.innerHTML = `
                             ◦ ACCESS GRANTED ◦<br>
-                            <strong>TOKEN ACCEPTED</strong>${submissionInfo}${rotationInfo}<br>
+                            <strong>TOKEN ACCEPTED & ROTATED</strong>${rotationInfo}<br>
                             <span style="font-size: 0.9em; margin-top: 10px; display: block;">
-                            Multiple people can submit the same token. Redirecting to secure channel...
+                            Token is now BLOCKED forever. All users will see the new token. Redirecting...
                             </span>
                         `;
+
+                        // If global refresh is needed, trigger it for all other users
+                        if (data.globalRefresh) {
+                            console.log('🌐 Global refresh triggered - other users will see new flag');
+                            // The polling mechanism will handle updating other users
+                        }
 
                         // Redirect to the Google Form after a short delay
                         setTimeout(() => {
                             window.location.href = 'https://docs.google.com/forms/d/e/1FAIpQLScxw6hkaqiW9lUfGmLPlJMX4cpkh7_q5K8pfLqFldWN3THkOg/viewform?usp=send_form';
                         }, 3000);
                     } else {
+                        // Flag was incorrect or blocked
+                        attempts = data.attempts;
+                        updateStats();
+                        
+                        messageEl.className = 'message error';
+                        
+                        if (data.flagBlocked) {
+                            // Special handling for blocked flags
+                            messageEl.innerHTML = `
+                                ◦ FLAG BLOCKED ◦<br>
+                                <strong>This token has already been used</strong><br>
+                                <span style="font-size: 0.9em; margin-top: 10px; display: block;">
+                                Someone else submitted it first. Find the current active token.
+                                </span>
+                            `;
+                            
+                            // Force refresh the current flag from server
+                            setTimeout(async () => {
+                                try {
+                                    const refreshResponse = await fetch('/api/flag-state');
+                                    if (refreshResponse.ok) {
+                                        const refreshData = await refreshResponse.json();
+                                        Q = refreshData.Q;
+                                        currentFlagIndex = Q;
+                                        updateStats();
+                                        document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
+                                        console.log(`🔄 Refreshed to current flag: Q=${Q}`);
+                                    }
+                                } catch (error) {
+                                    console.error('Failed to refresh flag state:', error);
+                                }
+                            }, 1000);
+                        } else {
+                            // Regular incorrect flag
+                            messageEl.textContent = '◦ ACCESS DENIED ◦ Invalid authentication token.';
+                        }
+                        
+                        // Clear error message after 5 seconds
+                        setTimeout(() => {
+                            messageEl.style.display = 'none';
+                        }, 5000);
+                    }
                         // Flag was incorrect
                         attempts = data.attempts;
                         updateStats();
@@ -702,44 +716,11 @@ const flagList = [
                 }
             } catch (error) {
                 console.error('Failed to validate flag on server:', error);
-                
-                // Fallback to local validation (legacy behavior)
-                attempts++;
-                updateStats();
-                
-                const currentFlag = getCurrentFlag();
-                const normalizedInput = input.replace(/^flag\{|\}$/g, '');
-                
-                if (normalizedInput === currentFlag || input === `flag{${currentFlag}}`) {
-                    Q++; // Increment Q locally as fallback
-                    currentFlagIndex = Q;
-                    updateStats();
-                    
-                    // Update localStorage
-                    localStorage.setItem('ctf_Q', Q);
-                    localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
-                    document.body.setAttribute('data-encrypted', flagList[currentFlagIndex]);
-                    
-                    messageEl.className = 'message success';
-                    messageEl.innerHTML = `
-                        ◦ ACCESS GRANTED ◦<br>
-                        <strong>TOKEN ACCEPTED</strong><br>
-                        <span style="font-size: 0.9em; margin-top: 10px; display: block;">
-                        You are solver #${Q}. Redirecting to secure channel...
-                        </span>
-                    `;
-
-                    setTimeout(() => {
-                        window.location.href = 'https://docs.google.com/forms/d/e/1FAIpQLScxw6hkaqiW9lUfGmLPlJMX4cpkh7_q5K8pfLqFldWN3THkOg/viewform?usp=send_form';
-                    }, 2000);
-                } else {
-                    messageEl.className = 'message error';
-                    messageEl.textContent = '◦ ACCESS DENIED ◦ Invalid authentication token.';
-                    
-                    setTimeout(() => {
-                        messageEl.style.display = 'none';
-                    }, 3000);
-                }
+                messageEl.className = 'message error';
+                messageEl.textContent = '◦ SERVER ERROR ◦ Please try again later.';
+                setTimeout(() => {
+                    messageEl.style.display = 'none';
+                }, 3000);
             }
 
             document.getElementById('flagInput').value = '';
@@ -768,8 +749,6 @@ const flagList = [
             console.log(`✅ Initialization complete: Q=${Q}, currentFlagIndex=${currentFlagIndex}`);
             // Start polling for updates after initial load
             startPolling();
-            // Start auto-refresh every 5 minutes
-            startAutoRefresh();
         }).catch((error) => {
             console.error('❌ Failed to initialize:', error);
             // Force retry initialization
@@ -777,7 +756,6 @@ const flagList = [
                 console.log('🔄 Retrying initialization...');
                 loadState().then(() => {
                     startPolling();
-                    startAutoRefresh();
                 });
             }, 3000);
         });
