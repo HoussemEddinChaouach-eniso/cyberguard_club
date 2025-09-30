@@ -317,6 +317,10 @@
 
         <div class="stats" id="stats">
             Access Attempts: <span id="attempts">0</span> | Successful Authentications: <span id="solves">0</span>
+            <br>
+            <span id="timer" style="color: #FFFFFF; font-weight: bold; margin-top: 5px; display: block;">
+                Next rotation in: --:--
+            </span>
         </div>
     </div>
 
@@ -330,6 +334,8 @@
         let currentFlagIndex = 0; // This will be Q from server
         let attempts = 0;
         let Q = 0; // Number of people who solved correctly (current flag index)
+        let timeUntilNextRotation = 0;
+        let countdownInterval;
 
         // Flag rotation list - obfuscated
 const flagList = [
@@ -427,14 +433,18 @@ const flagList = [
                     Q = data.Q || 0;
                     currentFlagIndex = Q; // Current flag is at index Q
                     attempts = data.attempts || 0;
+                    timeUntilNextRotation = data.timeUntilNextRotation || 0;
                     
-                    console.log(`✅ Loaded state from server: Q=${Q}, currentFlagIndex=${currentFlagIndex}, attempts=${attempts}`);
+                    console.log(`✅ Loaded state from server: Q=${Q}, currentFlagIndex=${currentFlagIndex}, attempts=${attempts}, timeUntilNext=${Math.floor(timeUntilNextRotation/1000)}s`);
                     
                     // Save server state to localStorage for offline fallback only
                     localStorage.setItem('ctf_Q', Q);
                     localStorage.setItem('ctf_current_flag_index', currentFlagIndex);
                     localStorage.setItem('ctf_attempts', attempts);
                     localStorage.setItem('ctf_last_updated', data.lastUpdated);
+                    
+                    // Start countdown timer
+                    startCountdown();
                 } else {
                     console.error('❌ Server response not ok:', response.status);
                     throw new Error(`Server response ${response.status}`);
@@ -543,6 +553,34 @@ const flagList = [
         // Decode current flag
         function getCurrentFlag() {
             return atob(flagList[currentFlagIndex]);
+        }
+
+        // Start countdown timer for flag rotation
+        function startCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            if (timeUntilNextRotation > 0) {
+                countdownInterval = setInterval(() => {
+                    timeUntilNextRotation -= 1000;
+                    
+                    if (timeUntilNextRotation <= 0) {
+                        clearInterval(countdownInterval);
+                        // Flag should rotate, refresh from server
+                        loadState();
+                        return;
+                    }
+                    
+                    // Update timer display
+                    const minutes = Math.floor(timeUntilNextRotation / 60000);
+                    const seconds = Math.floor((timeUntilNextRotation % 60000) / 1000);
+                    const timerEl = document.getElementById('timer');
+                    if (timerEl) {
+                        timerEl.textContent = `Next rotation in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                }, 1000);
+            }
         }
 
         // Hidden flag in page (inspectable)

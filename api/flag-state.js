@@ -2,10 +2,12 @@
 // This ensures state persists across ALL serverless function instances
 
 const DEFAULT_STATE = {
-  Q: 0, // Number of people who submitted the right flag (current flag index)
+  Q: Math.floor(Math.random() * 72), // Start with random flag index
   totalAttempts: 0,
   lastUpdated: Date.now(),
+  lastRotation: Date.now(), // Track when flag was last rotated
   usedFlags: {}, // Track which flags have been used: { "flagContent": true }
+  rotationInterval: 15 * 60 * 1000, // 15 minutes in milliseconds
   flagList: [
     'QzdCM1JfR1U0UkRfRW4xNTA=',
     'Q3liM3JHdTRyZEVuMTVv',
@@ -143,6 +145,32 @@ async function writeStateToStorage(state) {
   return false;
 }
 
+// Check if flag needs automatic rotation based on time
+function checkTimeBasedRotation(currentState) {
+  const now = Date.now();
+  const timeSinceLastRotation = now - (currentState.lastRotation || now);
+  const rotationInterval = currentState.rotationInterval || (15 * 60 * 1000); // 15 minutes default
+  
+  if (timeSinceLastRotation >= rotationInterval) {
+    console.log(`⏰ AUTO-ROTATION: ${Math.floor(timeSinceLastRotation / 60000)} minutes elapsed, rotating flag`);
+    
+    // Calculate how many rotations we've missed
+    const missedRotations = Math.floor(timeSinceLastRotation / rotationInterval);
+    const newQ = (currentState.Q + missedRotations) % 72;
+    
+    return {
+      ...currentState,
+      Q: newQ,
+      lastRotation: now - (timeSinceLastRotation % rotationInterval), // Align to rotation schedule
+      lastUpdated: now,
+      autoRotated: true,
+      missedRotations: missedRotations
+    };
+  }
+  
+  return currentState;
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -158,17 +186,36 @@ export default async function handler(req, res) {
   try {
     // Always read current state from external storage
     let currentState = await readStateFromStorage();
+    
+    // Check if flag needs automatic time-based rotation
+    const rotatedState = checkTimeBasedRotation(currentState);
+    if (rotatedState.autoRotated) {
+      console.log(`🔄 AUTO-ROTATION: Flag rotated from ${currentState.Q} to ${rotatedState.Q} due to time (${rotatedState.missedRotations} rotations)`);
+      currentState = rotatedState;
+      // Save the auto-rotated state
+      await writeStateToStorage(currentState);
+    }
 
     if (req.method === 'GET') {
       // Get current flag content for verification
       const flagList = currentState.flagList || DEFAULT_STATE.flagList;
       const currentFlagContent = Buffer.from(flagList[currentState.Q] || '', 'base64').toString();
       
+      // Calculate time until next rotation
+      const now = Date.now();
+      const timeSinceLastRotation = now - (currentState.lastRotation || now);
+      const rotationInterval = currentState.rotationInterval || (15 * 60 * 1000);
+      const timeUntilNextRotation = rotationInterval - (timeSinceLastRotation % rotationInterval);
+      
       res.status(200).json({
         Q: currentState.Q,
         currentFlag: currentState.Q, // Current flag index is Q
         attempts: currentState.totalAttempts,
         lastUpdated: currentState.lastUpdated,
+        lastRotation: currentState.lastRotation,
+        timeUntilNextRotation: Math.max(0, timeUntilNextRotation),
+        nextRotationAt: now + timeUntilNextRotation,
+        rotationIntervalMinutes: rotationInterval / 60000,
         serverTime: Date.now(),
         usedFlagsCount: Object.keys(currentState.usedFlags || {}).length,
         currentFlagContent: currentFlagContent // For debugging only
@@ -224,10 +271,11 @@ export default async function handler(req, res) {
             if (normalizedSubmitted === normalizedCurrent || submittedFlag === `flag{${normalizedCurrent}}`) {
               // Flag is correct and hasn't been used yet - mark it as used and increment Q
               newState.usedFlags[flagKey] = true; // Mark this flag as used
-              newState.Q = currentState.Q + 1;
+              newState.Q = (currentState.Q + 1) % 72; // Manual rotation on correct submission
+              newState.lastRotation = Date.now(); // Reset rotation timer on manual rotation
               newState.lastUpdated = Date.now();
               
-              console.log(`🎯 FLAG ACCEPTED! "${normalizedCurrent}" marked as used. Q incremented from ${currentState.Q} to ${newState.Q}. New flag is at index ${newState.Q}`);
+              console.log(`🎯 FLAG ACCEPTED! "${normalizedCurrent}" marked as used. Q incremented from ${currentState.Q} to ${newState.Q}. Rotation timer reset.`);
               
               // Return success with new flag info
               const saved = await writeStateToStorage(newState);
@@ -237,9 +285,11 @@ export default async function handler(req, res) {
                 currentFlag: newState.Q,
                 attempts: newState.totalAttempts,
                 lastUpdated: newState.lastUpdated,
+                timeUntilNextRotation: newState.rotationInterval || (15 * 60 * 1000),
                 serverTime: Date.now(),
-                message: `Flag accepted! You are person #${currentState.Q + 1} to solve this. This flag is now permanently invalid.`,
+                message: `Flag accepted! You are person #${currentState.Q + 1} to solve this. This flag is now permanently invalid. Timer reset!`,
                 solverNumber: currentState.Q + 1,
+                timerReset: true,
                 saved: saved
               });
             } else {
