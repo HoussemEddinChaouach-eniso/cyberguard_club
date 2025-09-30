@@ -560,9 +560,11 @@ const flagList = [
                         localStorage.setItem('ctf_last_updated', data.lastUpdated);
                         
                         messageEl.className = 'message success';
+                        const submissionInfo = data.submissionNumber ? 
+                            `<br><span style="font-size: 0.8em; opacity: 0.8;">Submission #${data.submissionNumber} - Flag rotated ${data.rotations} time${data.rotations > 1 ? 's' : ''}</span>` : '';
                         messageEl.innerHTML = `
                             ◦ ACCESS GRANTED ◦<br>
-                            <strong>TOKEN ACCEPTED</strong><br>
+                            <strong>TOKEN ACCEPTED</strong>${submissionInfo}<br>
                             <span style="font-size: 0.9em; margin-top: 10px; display: block;">
                             Token is now invalid for everyone. Redirecting to secure channel...
                             </span>

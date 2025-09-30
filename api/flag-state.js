@@ -6,6 +6,7 @@ const DEFAULT_STATE = {
   totalAttempts: 0,
   totalSolves: 0,
   lastUpdated: Date.now(),
+  submittedFlags: {}, // Track which flags have been submitted and by how many users
   flagList: [
     'QzdCM1JfR1U0UkRfRW4xNTA=',
     'Q3liM3JHdTRyZEVuMTVv',
@@ -189,13 +190,29 @@ export default async function handler(req, res) {
             console.log(`🔍 Validating flag: "${normalizedSubmitted}" against current: "${normalizedCurrent}" (index: ${currentState.currentFlagIndex})`);
 
             if (normalizedSubmitted === normalizedCurrent || submittedFlag === `flag{${normalizedCurrent}}`) {
-              // Flag is correct - rotate immediately
+              // Initialize submittedFlags if it doesn't exist
+              if (!newState.submittedFlags) {
+                newState.submittedFlags = {};
+              }
+
+              // Check if this flag was already submitted
+              const currentFlagKey = `flag_${currentState.currentFlagIndex}`;
+              const previousSubmissions = newState.submittedFlags[currentFlagKey] || 0;
+              
+              // Increment submission count for this flag
+              newState.submittedFlags[currentFlagKey] = previousSubmissions + 1;
+              const submissionCount = newState.submittedFlags[currentFlagKey];
+              
+              // Flag is correct - rotate by the number of times it has been submitted
               newState.totalSolves++;
               const oldIndex = newState.currentFlagIndex;
-              newState.currentFlagIndex = (newState.currentFlagIndex + 1) % 72;
+              
+              // Rotate flag by the submission count (each submission advances the flag)
+              newState.currentFlagIndex = (newState.currentFlagIndex + submissionCount) % 72;
               newState.lastUpdated = Date.now();
               newState.flagRotatedAt = Date.now();
-              console.log(`🎯 FLAG ACCEPTED! Rotating from ${oldIndex} to ${newState.currentFlagIndex} - Old flag is now INVALID`);
+              
+              console.log(`🎯 FLAG ACCEPTED! (Submission #${submissionCount}) Rotating from ${oldIndex} to ${newState.currentFlagIndex} - ${submissionCount} rotations applied`);
               
               // Return success with new flag info
               const saved = await writeStateToStorage(newState);
@@ -206,7 +223,9 @@ export default async function handler(req, res) {
                 solves: newState.totalSolves,
                 lastUpdated: newState.lastUpdated,
                 serverTime: Date.now(),
-                message: 'Flag accepted! Flag rotated for everyone.',
+                message: `Flag accepted! This was submission #${submissionCount}. Flag rotated ${submissionCount} time(s).`,
+                submissionNumber: submissionCount,
+                rotations: submissionCount,
                 saved: saved
               });
             } else {
