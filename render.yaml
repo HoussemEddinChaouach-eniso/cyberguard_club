@@ -2,6 +2,7 @@ services:
   - type: web
     name: cyberguards-ctf
     env: node
-    buildCommand: npm ci
+    buildCommand: npm install
     startCommand: npm start
     plan: free
+    autoDeploy: true
